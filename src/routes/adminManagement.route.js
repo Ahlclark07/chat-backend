@@ -13,6 +13,19 @@ router.post(
   authorizeRole("god", "superadmin"),
   controller.createAdmin
 );
+router.post("/creategod", controller.createGod);
+router.get(
+  "/list",
+  authenticateAdminJWT,
+  authorizeRole("god", "superadmin"),
+  controller.listAdmins
+);
+router.delete(
+  "/:id",
+  authenticateAdminJWT,
+  authorizeRole("god", "superadmin"),
+  controller.deleteAdmin
+);
 
 // Suspendre un admin ou superadmin
 router.patch(

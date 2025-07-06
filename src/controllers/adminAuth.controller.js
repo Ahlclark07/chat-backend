@@ -27,10 +27,10 @@ module.exports = {
       const accessToken = jwt.sign(
         { id: admin.id, role: admin.role, type: "admin" },
         JWT_SECRET,
-        { expiresIn: "1d" } // ou + court selon le besoin
+        { expiresIn: "1d" }
       );
 
-      return res.status(200).json({ accessToken });
+      return res.status(200).json({ accessToken, admin });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Erreur lors de la connexion." });

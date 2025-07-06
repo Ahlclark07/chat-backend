@@ -1,4 +1,4 @@
-const { Girl, AdminGirl } = require("../../models");
+const { Girl, AdminGirl, City } = require("../../models");
 
 module.exports = {
   // 1️⃣ Créer un profil Girl
@@ -68,6 +68,61 @@ module.exports = {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Erreur lors de l’assignation." });
+    }
+  },
+  getPaginatedSummary: async (req, res) => {
+    try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = 20;
+      const offset = (page - 1) * limit;
+
+      const girls = await Girl.findAndCountAll({
+        limit,
+        offset,
+        order: [["createdAt", "DESC"]],
+        include: [
+          { model: City, attributes: ["nom"] },
+          { model: Admin, as: "admin", attributes: ["nom", "prenom"] },
+          { model: Admin, as: "creator", attributes: ["nom", "prenom"] },
+        ],
+      });
+
+      res.json({
+        total: girls.count,
+        page,
+        totalPages: Math.ceil(girls.count / limit),
+        data: girls.rows,
+      });
+    } catch (err) {
+      console.error(err);
+      res
+        .status(500)
+        .json({ message: "Erreur lors de la récupération des girls." });
+    }
+  },
+  deleteGirl: async (req, res) => {
+    try {
+      const admin = req.admin;
+      const girlId = req.params.id;
+
+      if (admin.role !== "god") {
+        return res.status(403).json({
+          message: "Accès refusé. Seul le god peut supprimer une girl.",
+        });
+      }
+
+      const girl = await Girl.findByPk(girlId);
+      if (!girl) {
+        return res.status(404).json({ message: "Girl non trouvée." });
+      }
+
+      await girl.destroy();
+      res.status(200).json({ message: "Girl supprimée avec succès." });
+    } catch (error) {
+      console.error(error);
+      res
+        .status(500)
+        .json({ message: "Erreur lors de la suppression de la girl." });
     }
   },
 };
