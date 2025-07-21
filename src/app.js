@@ -28,10 +28,12 @@ app.use("/api/chat", chatRoutes);
 const adminAuthRoutes = require("./routes/adminAuth.route");
 app.use("/api/admin", adminAuthRoutes);
 const adminManagementRoutes = require("./routes/adminManagement.route");
-app.use("/api/admin", adminManagementRoutes);
+app.use("/api/admin-management", adminManagementRoutes);
 const adminStatsRoutes = require("./routes/adminStats.route");
 app.use("/api/admin", adminStatsRoutes);
 const adminLogRoutes = require("./routes/adminLog.route");
 app.use("/api/admin", adminLogRoutes);
+const locationsRoute = require("./routes/location.route");
+app.use("/locations", locationsRoute);
 
 module.exports = app;

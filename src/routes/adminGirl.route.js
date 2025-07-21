@@ -23,5 +23,13 @@ router.post(
   authorizeRole("superadmin", "god"),
   controller.assignGirlToAdmin
 );
+// Modifier une girl (profil, info...)
+router.patch(
+  "/girls/:id",
+  authenticateAdminJWT,
+  authorizeRole("superadmin", "god"),
+  uploadClientPhoto, // pour gérer l'envoi éventuel d'une nouvelle photo
+  controller.updateGirl
+);
 
 module.exports = router;

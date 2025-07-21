@@ -13,7 +13,6 @@ module.exports = {
         ville_id,
         telephone,
       } = req.body;
-
       const girl = await Girl.create({
         nom,
         prenom,
@@ -24,6 +23,20 @@ module.exports = {
         telephone,
         photo_profil: req.file ? req.file.path : null,
       });
+
+      // Enregistrement des photos secondaires (galerie)
+      if (req.files && req.files.photos && Array.isArray(req.files.photos)) {
+        const galleryPhotos = req.files.photos;
+
+        const photoData = galleryPhotos.map((file) => ({
+          girl_id: girl.id,
+          url: file.path,
+        }));
+
+        await GirlPhoto.bulkCreate(photoData);
+      }
+
+      // Log de l'action
       await logAdminAction({
         adminId: req.admin.id,
         action: "CREATE_GIRL",
@@ -41,6 +54,57 @@ module.exports = {
       res
         .status(500)
         .json({ message: "Erreur lors de la création de la Girl." });
+    }
+  },
+  updateGirl: async (req, res) => {
+    try {
+      const girlId = req.params.id;
+      const {
+        nom,
+        prenom,
+        date_naissance,
+        description,
+        pays_id,
+        ville_id,
+        telephone,
+      } = req.body;
+
+      const girl = await Girl.findByPk(girlId);
+      if (!girl) return res.status(404).json({ message: "Girl non trouvée" });
+
+      // Mise à jour des champs
+      girl.nom = nom ?? girl.nom;
+      girl.prenom = prenom ?? girl.prenom;
+      girl.date_naissance = date_naissance ?? girl.date_naissance;
+      girl.description = description ?? girl.description;
+      girl.pays_id = pays_id ?? girl.pays_id;
+      girl.ville_id = ville_id ?? girl.ville_id;
+      girl.telephone = telephone ?? girl.telephone;
+
+      // Photo de profil (si nouvelle image)
+      if (req.file) {
+        girl.photo_profil = req.file.path;
+      }
+
+      await girl.save();
+
+      await logAdminAction({
+        adminId: req.admin.id,
+        action: "UPDATE_GIRL",
+        targetType: "Girl",
+        targetId: girl.id,
+        details: {
+          nom: girl.nom,
+          prenom: girl.prenom,
+        },
+      });
+
+      res.status(200).json(girl);
+    } catch (err) {
+      console.error(err);
+      res
+        .status(500)
+        .json({ message: "Erreur lors de la mise à jour de la girl." });
     }
   },
 

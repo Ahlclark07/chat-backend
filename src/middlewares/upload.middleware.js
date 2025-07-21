@@ -8,12 +8,12 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
-    const filename = `client_${Date.now()}${ext}`;
+    const filename = `client_${Date.now()}_${file.fieldname}${ext}`;
     cb(null, filename);
   },
 });
 
-// Filtrage par type MIME
+// Filtrage des fichiers
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -25,5 +25,9 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter });
 
 module.exports = {
-  uploadClientPhoto: upload.single("photo_profil"),
+  // Gestion d'un champ 'photo_profil' + champ 'photos[]' pour la galerie
+  uploadClientPhoto: upload.fields([
+    { name: "photo_profil", maxCount: 1 },
+    { name: "photos", maxCount: 10 },
+  ]),
 };
