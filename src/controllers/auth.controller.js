@@ -18,11 +18,13 @@ module.exports = {
         date_naissance,
         pays_id,
         ville_id,
+        sexe,
+        description,
         telephone,
       } = req.body;
-      const photo_profil = req.file ? req.file.path : null;
 
-      // Vérifier si l'email est déjà utilisé
+      const photo_profil = req.files?.photo_profil?.[0]?.filename || null;
+
       const existing = await Client.findOne({ where: { email } });
       if (existing) {
         return res.status(400).json({ message: "Email déjà utilisé." });
@@ -37,19 +39,47 @@ module.exports = {
         mot_de_passe: hashedPassword,
         date_naissance,
         photo_profil,
+        description,
         pays_id,
         ville_id,
+        sexe,
         telephone,
-        credit_balance: 0,
+        credit_balance: 100,
       });
 
-      return res.status(201).json({ message: "Compte créé avec succès." });
+      // Récupérer les infos complètes avec relations
+      const fullClient = await Client.findByPk(client.id, {
+        attributes: { exclude: ["mot_de_passe"] },
+        include: [
+          { association: "pays", attributes: ["id", "name"] },
+          { association: "ville", attributes: ["id", "name"] },
+        ],
+      });
+
+      const accessToken = generateAccessToken(client);
+      const refreshToken = generateRefreshToken();
+
+      await RefreshToken.create({
+        client_id: client.id,
+        token: refreshToken,
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"],
+        expires_at: new Date(
+          Date.now() + REFRESH_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+        ),
+      });
+
+      return res.status(201).json({
+        message: "Compte créé avec succès.",
+        accessToken,
+        refreshToken,
+        client: fullClient,
+      });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur lors de l’inscription." });
     }
   },
-
   // POST /auth/login
   login: async (req, res) => {
     try {
@@ -72,7 +102,6 @@ module.exports = {
       const accessToken = generateAccessToken(client);
       const refreshToken = generateRefreshToken();
 
-      // Enregistrer le refresh token
       await RefreshToken.create({
         client_id: client.id,
         token: refreshToken,
@@ -83,16 +112,25 @@ module.exports = {
         ),
       });
 
+      // Récupérer client avec associations et sans mot de passe
+      const fullClient = await Client.findByPk(client.id, {
+        attributes: { exclude: ["mot_de_passe"] },
+        include: [
+          { association: "pays", attributes: ["id", "name"] },
+          { association: "ville", attributes: ["id", "name"] },
+        ],
+      });
+
       return res.status(200).json({
         accessToken,
         refreshToken,
+        client: fullClient,
       });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur lors de la connexion." });
     }
   },
-
   // POST /auth/refresh
   refresh: async (req, res) => {
     try {
@@ -143,6 +181,55 @@ module.exports = {
       return res
         .status(500)
         .json({ message: "Erreur lors de la déconnexion." });
+    }
+  },
+  // --- CONTROLLER --- // controllers/client.controller.js
+
+  updateProfile: async (req, res) => {
+    try {
+      const clientId = req.user.id; // Auth middleware needed
+      const {
+        nom,
+        prenom,
+        date_naissance,
+        pays_id,
+        ville_id,
+        description,
+        telephone,
+      } = req.body;
+      console.log(req.user);
+      const photo_profil = req.files?.photo_profil?.[0]?.filename;
+
+      const client = await Client.findByPk(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client introuvable." });
+      }
+
+      await client.update({
+        nom,
+        prenom,
+        date_naissance,
+        pays_id,
+        ville_id,
+        description,
+        telephone,
+        ...(photo_profil && { photo_profil }),
+      });
+
+      const updatedClient = await Client.findByPk(client.id, {
+        attributes: { exclude: ["mot_de_passe"] },
+        include: [
+          { association: "pays", attributes: ["id", "name"] },
+          { association: "ville", attributes: ["id", "name"] },
+        ],
+      });
+
+      return res.json({ client: updatedClient });
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la mise à jour." });
     }
   },
 };

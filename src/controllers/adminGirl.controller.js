@@ -1,4 +1,11 @@
-const { Girl, AdminGirl, City } = require("../../models");
+const {
+  Girl,
+  AdminGirl,
+  City,
+  Admin,
+  GirlPhoto,
+  AdminActivityLog,
+} = require("../../models");
 
 module.exports = {
   // 1️⃣ Créer un profil Girl
@@ -11,8 +18,11 @@ module.exports = {
         description,
         pays_id,
         ville_id,
+        sexe,
         telephone,
+        admin_id, // 👈 maintenant autorisé dans le body
       } = req.body;
+      console.log(req.files);
       const girl = await Girl.create({
         nom,
         prenom,
@@ -20,32 +30,31 @@ module.exports = {
         description,
         pays_id,
         ville_id,
+        sexe,
         telephone,
-        photo_profil: req.file ? req.file.path : null,
+        photo_profil: req.files.photo_profil[0]
+          ? req.files.photo_profil[0].filename
+          : null,
+        created_by: req.admin.id, // 👈 superadmin ou god créateur
+        admin_id: admin_id || null, // 👈 admin assigné
       });
 
-      // Enregistrement des photos secondaires (galerie)
-      if (req.files && req.files.photos && Array.isArray(req.files.photos)) {
+      if (req.files?.photos?.length) {
         const galleryPhotos = req.files.photos;
-
         const photoData = galleryPhotos.map((file) => ({
           girl_id: girl.id,
-          url: file.path,
+          url: file.filename,
         }));
-
         await GirlPhoto.bulkCreate(photoData);
       }
 
-      // Log de l'action
-      await logAdminAction({
+      await AdminActivityLog.create({
         adminId: req.admin.id,
         action: "CREATE_GIRL",
         targetType: "Girl",
         targetId: girl.id,
-        details: {
-          nom: girl.nom,
-          prenom: girl.prenom,
-        },
+        details: `nom: ${girl.nom},
+          prenom: ${girl.prenom}`,
       });
 
       res.status(201).json(girl);
@@ -56,6 +65,7 @@ module.exports = {
         .json({ message: "Erreur lors de la création de la Girl." });
     }
   },
+
   updateGirl: async (req, res) => {
     try {
       const girlId = req.params.id;
@@ -66,7 +76,8 @@ module.exports = {
         description,
         pays_id,
         ville_id,
-        telephone,
+        admin_id,
+        sexe,
       } = req.body;
 
       const girl = await Girl.findByPk(girlId);
@@ -79,24 +90,22 @@ module.exports = {
       girl.description = description ?? girl.description;
       girl.pays_id = pays_id ?? girl.pays_id;
       girl.ville_id = ville_id ?? girl.ville_id;
-      girl.telephone = telephone ?? girl.telephone;
-
+      girl.admin_id = admin_id ?? girl.admin_id;
+      console.log(req.body);
       // Photo de profil (si nouvelle image)
-      if (req.file) {
-        girl.photo_profil = req.file.path;
+      if (req.files.photo_profil) {
+        girl.photo_profil = req.files.photo_profil[0].filename;
       }
 
       await girl.save();
 
-      await logAdminAction({
+      await AdminActivityLog.create({
         adminId: req.admin.id,
         action: "UPDATE_GIRL",
         targetType: "Girl",
         targetId: girl.id,
-        details: {
-          nom: girl.nom,
-          prenom: girl.prenom,
-        },
+        details: `nom: ${girl.nom},
+          prenom: ${girl.prenom}`,
       });
 
       res.status(200).json(girl);
@@ -145,7 +154,7 @@ module.exports = {
         offset,
         order: [["createdAt", "DESC"]],
         include: [
-          { model: City, attributes: ["nom"] },
+          { model: City, as: "ville", attributes: ["name"] },
           { model: Admin, as: "admin", attributes: ["nom", "prenom"] },
           { model: Admin, as: "creator", attributes: ["nom", "prenom"] },
         ],
@@ -181,6 +190,15 @@ module.exports = {
       }
 
       await girl.destroy();
+
+      await AdminActivityLog.create({
+        adminId: req.admin.id,
+        action: "DELETE_GIRL",
+        targetType: "Girl",
+        targetId: girl.id,
+        details: `nom: ${girl.nom},
+          prenom: ${girl.prenom}`,
+      });
       res.status(200).json({ message: "Girl supprimée avec succès." });
     } catch (error) {
       console.error(error);

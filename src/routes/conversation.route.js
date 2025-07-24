@@ -1,0 +1,34 @@
+const express = require("express");
+const router = express.Router();
+const controller = require("../controllers/conversation.controller");
+const { authenticateAdminJWT } = require("../middlewares/admin.middleware");
+
+// Récupérer toutes les conversations d'une girl
+router.get(
+  "/girl/:girl_id",
+  authenticateAdminJWT,
+  controller.getConversationsForGirl
+);
+
+// Récupérer les messages d'une conversation
+router.get(
+  "/:conversation_id/messages",
+  authenticateAdminJWT,
+  controller.getMessagesForConversation
+);
+
+// Envoyer un message dans une conversation
+router.post(
+  "/:conversation_id/messages",
+  authenticateAdminJWT,
+  controller.sendMessageAsGirl
+);
+
+// Clients connectés sans conversation avec une girl
+router.get(
+  "/girl/:girl_id/available-clients",
+  authenticateAdminJWT,
+  controller.getAvailableClientsForGirl
+);
+
+module.exports = router;

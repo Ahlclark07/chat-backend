@@ -20,6 +20,12 @@ router.get(
   authorizeRole("god", "superadmin"),
   controller.listAdmins
 );
+router.get(
+  "/list/all",
+  authenticateAdminJWT,
+  authorizeRole("god", "superadmin"),
+  controller.listAllAdmins
+);
 router.delete(
   "/:id",
   authenticateAdminJWT,

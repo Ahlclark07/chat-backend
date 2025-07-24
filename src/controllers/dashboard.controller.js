@@ -6,7 +6,7 @@ const {
   Client,
   Message,
   CreditTransaction,
-} = require("../../../models");
+} = require("../../models");
 const { startOfHour, subHours } = require("date-fns");
 
 exports.getStats = async (req, res) => {
@@ -73,7 +73,7 @@ exports.getStats = async (req, res) => {
       const [totalClients, totalGirls, totalCredits] = await Promise.all([
         Client.count(),
         Girl.count(),
-        CreditTransaction.sum("montant"),
+        CreditTransaction.sum("amount"),
       ]);
       response.allStats = { totalClients, totalGirls, totalCredits };
     }

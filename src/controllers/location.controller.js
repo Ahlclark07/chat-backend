@@ -1,4 +1,4 @@
-const { Country, City } = require("../models");
+const { Country, City } = require("../../models");
 
 exports.getCountries = async (req, res) => {
   try {
@@ -14,7 +14,9 @@ exports.getCountries = async (req, res) => {
 
 exports.getCities = async (req, res) => {
   try {
-    const cities = await City.findAll({ include: [{ model: Country }] });
+    const cities = await City.findAll({
+      include: [{ model: Country, as: "country" }],
+    });
     res.json(cities);
   } catch (err) {
     console.error(err);
@@ -27,7 +29,7 @@ exports.getCities = async (req, res) => {
 exports.getCitiesByCountry = async (req, res) => {
   const { countryId } = req.params;
   try {
-    const cities = await City.findAll({ where: { pays_id: countryId } });
+    const cities = await City.findAll({ where: { country_id: countryId } });
     res.json(cities);
   } catch (err) {
     console.error(err);

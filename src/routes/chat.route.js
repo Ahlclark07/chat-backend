@@ -5,25 +5,14 @@ const {
   uploadMessageFile,
 } = require("../middlewares/uploadChatMedia.middleware");
 const { authenticateJWT } = require("../middlewares/auth.middleware");
-
-router.get("/conversations", authenticateJWT, chatController.getConversations);
 router.get(
-  "/conversations/:id/messages",
-  authenticateJWT,
-  chatController.getMessages
-);
-router.post(
-  "/conversations/:id/messages",
-  authenticateJWT,
-  chatController.sendMessage
-);
-router.post(
   "/conversations",
   authenticateJWT,
-  chatController.createConversation
+  chatController.getClientConversations
 );
+
 router.post(
-  "/conversations/:id/messages",
+  "/:girl_id/message",
   authenticateJWT,
   uploadMessageFile,
   chatController.sendMessage

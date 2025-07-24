@@ -3,6 +3,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const dotenv = require("dotenv");
 const { sequelize } = require("../models");
+const path = require("path");
 
 dotenv.config();
 
@@ -13,7 +14,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
-
+console.log(path.join(__dirname, "uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 // Routes
 app.get("/ping", (req, res) => {
   res.json({ message: "pong" });
@@ -27,6 +29,10 @@ const chatRoutes = require("./routes/chat.route");
 app.use("/api/chat", chatRoutes);
 const adminAuthRoutes = require("./routes/adminAuth.route");
 app.use("/api/admin", adminAuthRoutes);
+const adminDashRoutes = require("./routes/admin.route");
+app.use("/api/admin", adminDashRoutes);
+const girlRoutes = require("./routes/adminGirl.route");
+app.use("/api/admin", girlRoutes);
 const adminManagementRoutes = require("./routes/adminManagement.route");
 app.use("/api/admin-management", adminManagementRoutes);
 const adminStatsRoutes = require("./routes/adminStats.route");
@@ -34,6 +40,9 @@ app.use("/api/admin", adminStatsRoutes);
 const adminLogRoutes = require("./routes/adminLog.route");
 app.use("/api/admin", adminLogRoutes);
 const locationsRoute = require("./routes/location.route");
-app.use("/locations", locationsRoute);
+app.use("/api/locations", locationsRoute);
+app.use("/api/conversations", require("./routes/conversationNote.route"));
+app.use("/api/conversations", require("./routes/conversation.route"));
+app.use("/api/favorites", require("./routes/favorite.route"));
 
 module.exports = app;

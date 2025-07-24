@@ -21,6 +21,8 @@ module.exports = (sequelize, DataTypes) => {
       sender_type: DataTypes.ENUM("client", "girl", "system"),
       body: DataTypes.TEXT,
       media_url: DataTypes.STRING,
+      sender_id: DataTypes.INTEGER,
+      receiver_id: DataTypes.INTEGER,
     },
     {
       sequelize,

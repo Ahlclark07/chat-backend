@@ -5,14 +5,14 @@ const {
   authenticateAdminJWT,
   authorizeRole,
 } = require("../middlewares/admin.middleware");
-const { uploadClientPhoto } = require("../middlewares/upload.middleware"); // utilisé aussi ici pour la photo
+const { uploadGirlPhoto } = require("../middlewares/uploadGirl.middleware"); // utilisé aussi ici pour la photo
 
 // Créer une girl
 router.post(
   "/girls",
   authenticateAdminJWT,
   authorizeRole("superadmin", "god"),
-  uploadClientPhoto, // réutilisé ici
+  uploadGirlPhoto, // réutilisé ici
   controller.createGirl
 );
 
@@ -28,7 +28,7 @@ router.patch(
   "/girls/:id",
   authenticateAdminJWT,
   authorizeRole("superadmin", "god"),
-  uploadClientPhoto, // pour gérer l'envoi éventuel d'une nouvelle photo
+  uploadGirlPhoto, // pour gérer l'envoi éventuel d'une nouvelle photo
   controller.updateGirl
 );
 

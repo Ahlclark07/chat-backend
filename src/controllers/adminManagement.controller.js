@@ -86,7 +86,15 @@ module.exports = {
 
       const { rows, count } = await Admin.findAndCountAll({
         where: whereClause,
-        attributes: ["id", "nom", "prenom", "email", "telephone", "role"],
+        attributes: [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "telephone",
+          "role",
+          "is_active",
+        ],
         offset,
         limit,
         order: [["createdAt", "DESC"]],
@@ -96,6 +104,35 @@ module.exports = {
         data: rows,
         page,
         totalPages: Math.ceil(count / limit),
+      });
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la récupération des admins." });
+    }
+  },
+  listAllAdmins: async (req, res) => {
+    try {
+      const requester = req.admin;
+      const whereClause = {};
+
+      if (requester.role === "superadmin") {
+        whereClause.role = "admin";
+        whereClause.is_active = "1";
+      } else if (requester.role !== "god") {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+
+      const { rows, count } = await Admin.findAndCountAll({
+        where: whereClause,
+        attributes: ["id", "nom", "prenom"],
+
+        order: [["createdAt", "DESC"]],
+      });
+
+      return res.json({
+        data: rows,
       });
     } catch (err) {
       console.error(err);
@@ -162,9 +199,16 @@ module.exports = {
           .json({ message: "Tu ne peux suspendre que des admins." });
       }
 
-      await Admin.update({ is_active: false }, { where: { id } });
+      const newStatus = !target.is_active;
 
-      res.json({ message: "Compte suspendu." });
+      await target.update({ is_active: newStatus });
+
+      res.json({
+        message: newStatus
+          ? "Compte réactivé avec succès."
+          : "Compte suspendu avec succès.",
+        is_active: newStatus,
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Erreur lors de la suspension." });

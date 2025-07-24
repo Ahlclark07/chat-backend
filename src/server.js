@@ -2,13 +2,13 @@ require("dotenv").config();
 const app = require("./app");
 const { sequelize } = require("../models");
 const http = require("http");
-const { Server } = require("socket.io");
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
 const { setupSocket } = require("./sockets");
-setupSocket(server);
+const io = setupSocket(server);
+app.set("io", io);
 (async () => {
   try {
     await sequelize.authenticate();
