@@ -1,5 +1,7 @@
 const { Conversation, Message, Client, Girl } = require("../../models");
 const { Op } = require("sequelize");
+const path = require("path");
+const fs = require("fs");
 
 // 1. Récupérer les conversations d'une girl
 exports.getConversationsForGirl = async (req, res) => {
@@ -70,8 +72,9 @@ exports.sendMessageAsGirl = async (req, res) => {
       media_url: mediaPath,
     });
 
+    // Mettre à jour la conversation: date et admin assigné
     await Conversation.update(
-      { updatedAt: new Date() },
+      { updatedAt: new Date(), assigned_admin_id: req.admin.id },
       { where: { id: conversation_id } }
     );
     const io = req.app.get("io"); // assure-toi que tu fais `app.set('io', io)` dans server.js
@@ -169,6 +172,25 @@ exports.deleteMessage = async (req, res) => {
     if (!message) {
       console.log("introuvable");
       return res.status(404).json({ error: "Message introuvable" });
+    }
+
+    // Supprimer le média associé si présent
+    if (message.media_url) {
+      const filePath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "uploads",
+        "messages",
+        message.media_url
+      );
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.warn("Suppression média échouée:", filePath, e.message);
+      }
     }
 
     await message.destroy();

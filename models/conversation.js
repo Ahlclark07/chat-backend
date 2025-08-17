@@ -12,6 +12,13 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "girl_id",
         as: "girl",
       });
+      // Admin assigné en charge de cette conversation (si défini)
+      if (models.Admin) {
+        Conversation.belongsTo(models.Admin, {
+          foreignKey: "assigned_admin_id",
+          as: "assigned_admin",
+        });
+      }
       Conversation.hasMany(models.Message, {
         foreignKey: "conversation_id",
         as: "messages",
@@ -29,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
       girl_id: DataTypes.INTEGER,
       opened_at: DataTypes.DATE,
       closed_at: DataTypes.DATE,
+      assigned_admin_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       sequelize,

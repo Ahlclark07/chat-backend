@@ -78,13 +78,16 @@ module.exports.sendMessage = async (req, res) => {
       media_url: mediaPath,
     });
     const client = await Client.findByPk(clientId);
-    // Débiter 1 coin
-    await client.update({ credit_balance: client.credit_balance - 1 });
+    // Coût paramétrable par Setting (défaut 1)
+    const { Setting } = require("../../models");
+    const s = await Setting.findOne({ where: { key: "coin_cost_per_message" } });
+    const cost = s ? parseInt(s.value, 10) || 1 : 1;
+    await client.update({ credit_balance: client.credit_balance - cost });
     await CreditTransaction.create({
       client_id: clientId,
       conversation_id: conversation.id,
       message_id: message.id,
-      amount: -1,
+      amount: -cost,
     });
 
     const io = req.app.get("io");

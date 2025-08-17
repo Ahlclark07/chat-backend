@@ -6,6 +6,8 @@ const {
   GirlPhoto,
   AdminActivityLog,
 } = require("../../models");
+const path = require("path");
+const fs = require("fs");
 
 module.exports = {
   // 1️⃣ Créer un profil Girl
@@ -179,6 +181,47 @@ module.exports = {
       if (!girl) {
         return res.status(404).json({ message: "Girl non trouvée." });
       }
+
+      // Supprimer les photos de galerie sur le disque
+      const photos = await GirlPhoto.findAll({ where: { girl_id: girlId } });
+      for (const p of photos) {
+        const filePath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          "girls",
+          p.url
+        );
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {
+          console.warn("Suppression photo galerie échouée:", filePath);
+        }
+      }
+      // Supprimer la photo de profil si présente
+      if (girl.photo_profil) {
+        const pp = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          "girls",
+          girl.photo_profil
+        );
+        try {
+          if (fs.existsSync(pp)) {
+            fs.unlinkSync(pp);
+          }
+        } catch (e) {
+          console.warn("Suppression photo profil échouée:", pp);
+        }
+      }
+
+      // Nettoyage DB des entrées de galerie (au cas où les FK ne sont pas en cascade)
+      await GirlPhoto.destroy({ where: { girl_id: girlId } });
 
       await girl.destroy();
 

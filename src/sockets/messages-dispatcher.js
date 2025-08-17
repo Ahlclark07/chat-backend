@@ -7,13 +7,15 @@ const {
 const connectedAdmins = new Map(); // socketId -> adminId
 const adminSockets = new Map(); // adminId -> socketId
 const assignedConversations = new Map(); // conversationId -> { adminId, timeout }
-const pendingMessages = new Map(); // conversationId -> { conversationId, client, girl, lastMessages, createdAt }
+// conversationId -> { conversationId, client, girl, lastMessages, createdAt, assignedAdminId }
+const pendingMessages = new Map();
 
 function initMessageDispatcher(io) {
   io.on("connection", (socket) => {
     socket.on("register_admin", async (adminId) => {
-      connectedAdmins.set(socket.id, adminId);
-      adminSockets.set(adminId, socket.id);
+      const normalizedId = parseInt(adminId, 10);
+      connectedAdmins.set(socket.id, normalizedId);
+      adminSockets.set(normalizedId, socket.id);
       console.log(`🔐 Admin ${adminId} connecté.`);
 
       // 📦 Récupère toutes les conversations non traitées
@@ -30,6 +32,7 @@ function initMessageDispatcher(io) {
             girl: conv.girl,
             lastMessages,
             createdAt: Date.now(),
+            assignedAdminId: conv.assigned_admin_id || null,
           });
         }
       }
@@ -96,10 +99,43 @@ async function handleClientMessage(io, { conversationId }) {
       girl: conversation.girl,
       lastMessages,
       createdAt: Date.now(),
+      assignedAdminId: conversation.assigned_admin_id || null,
     };
     pendingMessages.set(conversationId, payload);
   }
   console.log("size : " + pendingMessages.size);
+
+  // Si une affectation existe et que l'admin est connecté et disponible, préférer cet admin
+  if (payload.assignedAdminId) {
+    const preferredAdminId = payload.assignedAdminId;
+    const socketId = adminSockets.get(preferredAdminId);
+    const adminIsConnected = !!socketId;
+    const adminIsBusy = Array.from(assignedConversations.values()).some(
+      (v) => v.adminId === preferredAdminId
+    );
+
+    if (adminIsConnected && !adminIsBusy) {
+      const timeout = setTimeout(() => {
+        console.log(
+          `  ⏱ Temps écoulé pour admin ${preferredAdminId} sur conv ${conversationId}.`
+        );
+        assignedConversations.delete(conversationId);
+        // conversation toujours en attente
+        handleClientMessage(io, { conversationId }); // retry
+      }, 60000); // 1 minute
+
+      assignedConversations.set(conversationId, {
+        adminId: preferredAdminId,
+        timeout,
+      });
+
+      io.to(socketId).emit("new_message_for_admin", payload);
+      console.log(
+        `📨 Conversation ${conversationId} envoyée à l'admin assigné ${preferredAdminId}`
+      );
+      return;
+    }
+  }
 
   const availableAdmins = Array.from(adminSockets.keys()).filter(
     (adminId) =>
