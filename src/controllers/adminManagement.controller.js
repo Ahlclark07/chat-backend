@@ -34,7 +34,8 @@ module.exports = {
   },
   createAdmin: async (req, res) => {
     try {
-      const { nom, prenom, email, mot_de_passe, telephone, role } = req.body;
+      const { nom, prenom, email, mot_de_passe, telephone, role, identifiant } =
+        req.body;
       const creatorRole = req.admin.role; // rôle du créateur
 
       // ❌ superadmin ne peut créer QUE des admin
@@ -60,6 +61,7 @@ module.exports = {
         mot_de_passe: hashed,
         telephone,
         role,
+        identifiant,
         is_active: true,
       });
 
@@ -72,9 +74,6 @@ module.exports = {
   listAdmins: async (req, res) => {
     try {
       const requester = req.admin;
-      const page = parseInt(req.query.page) || 1;
-      const limit = 20;
-      const offset = (page - 1) * limit;
 
       const whereClause = {};
 
@@ -94,16 +93,14 @@ module.exports = {
           "telephone",
           "role",
           "is_active",
+          "identifiant",
         ],
-        offset,
-        limit,
+
         order: [["createdAt", "DESC"]],
       });
 
       return res.json({
         data: rows,
-        page,
-        totalPages: Math.ceil(count / limit),
       });
     } catch (err) {
       console.error(err);

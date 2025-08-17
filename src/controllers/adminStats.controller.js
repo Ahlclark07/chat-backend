@@ -1,96 +1,63 @@
-const {
-  Admin,
-  AdminGirl,
-  Girl,
-  Conversation,
-  Message,
-  CreditTransaction,
-} = require("../../models");
-const { Op, fn, col, literal } = require("sequelize");
-const { startOfWeek, startOfDay } = require("date-fns");
+const { Message } = require("../../models");
+const { Op } = require("sequelize");
+
+function getHourRange(date) {
+  const h = date.getHours();
+  const start = Math.floor(h / 4) * 4;
+  const end = start + 4;
+  return `${start.toString().padStart(2, "0")}-${end
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+async function getAdminStats(req, res) {
+  const adminId = req.params.adminId;
+
+  const now = new Date();
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(now.getDate() - 3);
+
+  // Récupère tous les messages de l'admin des 3 derniers jours
+  const messages = await Message.findAll({
+    where: {
+      sender_type: "girl",
+      sender_id: adminId,
+      createdAt: {
+        [Op.gte]: threeDaysAgo,
+      },
+    },
+    attributes: ["createdAt"],
+    raw: true,
+  });
+
+  // Regroupement des stats par jour et tranche horaire
+  const stats = {};
+
+  for (const msg of messages) {
+    const date = new Date(msg.createdAt);
+    const day = date.toISOString().split("T")[0]; // yyyy-mm-dd
+    const range = getHourRange(date);
+
+    if (!stats[day]) stats[day] = {};
+    if (!stats[day][range]) stats[day][range] = 0;
+
+    stats[day][range]++;
+  }
+
+  // Récupère le total de messages envoyés (tous temps confondus)
+  const total = await Message.count({
+    where: {
+      sender_type: "girl",
+      sender_id: adminId,
+    },
+  });
+
+  return res.json({
+    totalMessagesSent: total,
+    statsByHourRange: stats,
+  });
+}
 
 module.exports = {
-  getGlobalStats: async (req, res) => {
-    try {
-      const today = startOfDay(new Date());
-      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // lundi
-
-      // Bloc 1 : global
-      const [
-        total_messages,
-        messages_today,
-        messages_this_week,
-        total_credits,
-      ] = await Promise.all([
-        Message.count(),
-        Message.count({ where: { createdAt: { [Op.gte]: today } } }),
-        Message.count({ where: { createdAt: { [Op.gte]: weekStart } } }),
-        CreditTransaction.sum("amount"), // montant est négatif
-      ]);
-
-      // Bloc 2 : par admin
-      const admins = await Admin.findAll({
-        where: { role: "admin" },
-        attributes: ["id", "nom", "prenom"],
-        include: [
-          {
-            model: AdminGirl,
-            include: [{ model: Girl }],
-          },
-        ],
-      });
-
-      const adminStats = [];
-
-      for (const admin of admins) {
-        const girlIds = admin.AdminGirls.map((ag) => ag.girl_id);
-
-        const [envoyes, reçus, cette_semaine] = await Promise.all([
-          Message.count({
-            where: {
-              sender_type: "girl",
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-          Message.count({
-            where: {
-              sender_type: "client",
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-          Message.count({
-            where: {
-              sender_type: "girl",
-              createdAt: { [Op.gte]: weekStart },
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-        ]);
-
-        adminStats.push({
-          admin_id: admin.id,
-          admin_nom: `${admin.prenom} ${admin.nom}`,
-          messages_envoyes: envoyes,
-          messages_recus: reçus,
-          messages_cette_semaine: cette_semaine,
-        });
-      }
-
-      res.json({
-        global: {
-          total_messages,
-          messages_today,
-          messages_this_week,
-          total_credits_used: Math.abs(total_credits || 0),
-        },
-        per_admin: adminStats,
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Erreur lors du calcul des stats." });
-    }
-  },
+  getAdminStats,
 };

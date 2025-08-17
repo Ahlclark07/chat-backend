@@ -5,11 +5,11 @@ const {
   Girl,
   Client,
 } = require("../../models");
+const { handleClientMessage } = require("../sockets/messages-dispatcher");
+
 const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
-const { setupSocket } = require("../sockets");
-const io = setupSocket();
 // GET /chat/conversations
 module.exports.getClientConversations = async (req, res) => {
   try {
@@ -40,7 +40,6 @@ module.exports.getClientConversations = async (req, res) => {
 module.exports.sendMessage = async (req, res) => {
   try {
     const clientId = req.user.id;
-    console.log(req.params);
     const girlId = parseInt(req.params.girl_id); // girl_id passé dans l'URL
     const { body } = req.body;
 
@@ -65,8 +64,8 @@ module.exports.sendMessage = async (req, res) => {
 
     // Gestion du média
     let mediaPath = null;
-    if (req.files?.media?.[0]) {
-      mediaPath = req.files.media[0].filename;
+    if (req.file) {
+      mediaPath = req.file.filename;
     }
 
     // Créer le message
@@ -78,8 +77,9 @@ module.exports.sendMessage = async (req, res) => {
       body,
       media_url: mediaPath,
     });
-
+    const client = await Client.findByPk(clientId);
     // Débiter 1 coin
+    await client.update({ credit_balance: client.credit_balance - 1 });
     await CreditTransaction.create({
       client_id: clientId,
       conversation_id: conversation.id,
@@ -87,11 +87,11 @@ module.exports.sendMessage = async (req, res) => {
       amount: -1,
     });
 
-    // Émettre via socket
-    io.to(`conversation_${conversation.id}`).emit("ping_message", {
-      conversation_id: conversation.id,
+    const io = req.app.get("io");
+    // 🚨 Si c’est bien un client qui envoie
+    await handleClientMessage(io, {
+      conversationId: conversation.id,
     });
-
     return res.status(201).json({ message });
   } catch (err) {
     console.error(err);

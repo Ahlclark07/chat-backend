@@ -2,7 +2,9 @@ const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/conversation.controller");
 const { authenticateAdminJWT } = require("../middlewares/admin.middleware");
-
+const {
+  uploadMessageFile,
+} = require("../middlewares/uploadChatMedia.middleware");
 // Récupérer toutes les conversations d'une girl
 router.get(
   "/girl/:girl_id",
@@ -21,6 +23,7 @@ router.get(
 router.post(
   "/:conversation_id/messages",
   authenticateAdminJWT,
+  uploadMessageFile,
   controller.sendMessageAsGirl
 );
 
@@ -31,4 +34,7 @@ router.get(
   controller.getAvailableClientsForGirl
 );
 
+router.delete("/messages/:id", authenticateAdminJWT, controller.deleteMessage);
+
+router.post("/", controller.createConversation);
 module.exports = router;

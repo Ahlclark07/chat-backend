@@ -43,6 +43,7 @@ exports.getMessagesForConversation = async (req, res) => {
   }
 };
 exports.sendMessageAsGirl = async (req, res) => {
+  console.log(req.body);
   const { conversation_id } = req.params;
   const { contenu } = req.body;
   const body = contenu;
@@ -54,13 +55,19 @@ exports.sendMessageAsGirl = async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ message: "Conversation introuvable." });
     }
+    // Gestion du média
+    let mediaPath = null;
+    if (req.file) {
+      mediaPath = req.file.filename;
+    }
 
     const message = await Message.create({
       conversation_id,
       body,
       sender_type: "girl",
-      sender_id: conversation.girl_id,
+      sender_id: req.admin.id,
       receiver_id: conversation.client_id,
+      media_url: mediaPath,
     });
 
     await Conversation.update(
@@ -83,7 +90,7 @@ exports.sendMessageAsGirl = async (req, res) => {
   }
 };
 
-const { onlineClients } = require("../sockets/onlineClients"); // ← on importe ici
+const { connectedClients, clientIdToSocketId } = require("../sockets/index"); // ← on importe ici
 
 exports.getAvailableClientsForGirl = async (req, res) => {
   const { girl_id } = req.params;
@@ -98,7 +105,7 @@ exports.getAvailableClientsForGirl = async (req, res) => {
     );
 
     // 2️⃣ Extraire les IDs de clients connectés depuis la Map
-    const onlineClientIds = Array.from(onlineClients.keys()).map((id) =>
+    const onlineClientIds = Array.from(clientIdToSocketId.keys()).map((id) =>
       parseInt(id)
     );
 
@@ -112,8 +119,6 @@ exports.getAvailableClientsForGirl = async (req, res) => {
       where: {
         id: { [Op.in]: availableIds },
       },
-      limit: 10,
-      attributes: ["id", "nom", "prenom"],
     });
 
     res.json(clients);
@@ -122,5 +127,55 @@ exports.getAvailableClientsForGirl = async (req, res) => {
     res
       .status(500)
       .json({ message: "Erreur lors du chargement des clients disponibles." });
+  }
+};
+exports.createConversation = async (req, res) => {
+  const { girl_id, client_id } = req.body;
+
+  try {
+    // Vérifier si la conversation existe déjà
+    const existing = await Conversation.findOne({
+      where: { girl_id, client_id },
+    });
+
+    if (existing) {
+      return res.status(200).json(existing);
+    }
+
+    // Créer la conversation vide
+    const conversation = await Conversation.create({
+      girl_id,
+      client_id,
+    });
+
+    res.status(201).json(conversation);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Erreur lors de la création de la conversation.",
+    });
+  }
+};
+
+exports.deleteMessage = async (req, res) => {
+  const { id } = req.params;
+
+  if (!["superadmin", "god"].includes(req.admin.role)) {
+    return res.status(403).json({ error: "Accès refusé" });
+  }
+
+  try {
+    const message = await Message.findByPk(id);
+    if (!message) {
+      console.log("introuvable");
+      return res.status(404).json({ error: "Message introuvable" });
+    }
+
+    await message.destroy();
+
+    res.json({ success: true, message: "Message supprimé avec succès." });
+  } catch (err) {
+    console.error("Erreur lors de la suppression :", err);
+    res.status(500).json({ error: "Erreur serveur" });
   }
 };

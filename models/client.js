@@ -36,6 +36,7 @@ module.exports = (sequelize, DataTypes) => {
       is_banned: DataTypes.BOOLEAN,
       ban_reason: DataTypes.STRING,
       ban_expires_at: DataTypes.DATE,
+      last_login: DataTypes.DATE,
       description: {
         type: DataTypes.TEXT,
         allowNull: true,

@@ -7,10 +7,10 @@ const {
 } = require("../middlewares/admin.middleware");
 
 router.get(
-  "/stats",
+  "/:adminId/stats",
   authenticateAdminJWT,
-  authorizeRole("god", "superadmin"),
-  controller.getGlobalStats
+
+  controller.getAdminStats
 );
 
 module.exports = router;

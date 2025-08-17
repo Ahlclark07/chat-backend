@@ -32,7 +32,13 @@ module.exports = (sequelize, DataTypes) => {
       telephone: DataTypes.STRING,
       role: DataTypes.ENUM("admin", "superadmin", "god"),
       is_active: DataTypes.BOOLEAN,
+      identifiant: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+      },
     },
+
     {
       sequelize,
       modelName: "Admin",
