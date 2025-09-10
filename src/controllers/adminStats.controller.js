@@ -1,96 +1,129 @@
+const { Message } = require("../../models");
+const { Op } = require("sequelize");
 const {
-  Admin,
-  AdminGirl,
-  Girl,
-  Conversation,
-  Message,
-  CreditTransaction,
-} = require("../../models");
-const { Op, fn, col, literal } = require("sequelize");
-const { startOfWeek, startOfDay } = require("date-fns");
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subWeeks,
+  subMonths,
+  startOfYear,
+  endOfYear,
+} = require("date-fns");
 
-module.exports = {
-  getGlobalStats: async (req, res) => {
-    try {
-      const today = startOfDay(new Date());
-      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // lundi
+function getHourRange(date) {
+  const h = date.getHours();
+  const start = Math.floor(h / 4) * 4;
+  const end = start + 4;
+  return `${start.toString().padStart(2, "0")}-${end
+    .toString()
+    .padStart(2, "0")}`;
+}
 
-      // Bloc 1 : global
-      const [
-        total_messages,
-        messages_today,
-        messages_this_week,
-        total_credits,
-      ] = await Promise.all([
-        Message.count(),
-        Message.count({ where: { createdAt: { [Op.gte]: today } } }),
-        Message.count({ where: { createdAt: { [Op.gte]: weekStart } } }),
-        CreditTransaction.sum("amount"), // montant est négatif
+async function getAdminStats(req, res) {
+  const adminId = parseInt(req.params.adminId, 10);
+
+  const now = new Date();
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(now.getDate() - 3);
+
+  // Récupère tous les messages de l'admin des 3 derniers jours
+  const messages = await Message.findAll({
+    where: {
+      sender_type: "girl",
+      sender_id: adminId,
+      createdAt: {
+        [Op.gte]: threeDaysAgo,
+      },
+    },
+    attributes: ["createdAt"],
+    raw: true,
+  });
+
+  // Regroupement des stats par jour et tranche horaire
+  const stats = {};
+
+  for (const msg of messages) {
+    const date = new Date(msg.createdAt);
+    const day = date.toISOString().split("T")[0]; // yyyy-mm-dd
+    const range = getHourRange(date);
+
+    if (!stats[day]) stats[day] = {};
+    if (!stats[day][range]) stats[day][range] = 0;
+
+    stats[day][range]++;
+  }
+
+  // Récupère le total de messages envoyés (tous temps confondus)
+  const total = await Message.count({
+    where: {
+      sender_type: "girl",
+      sender_id: adminId,
+    },
+  });
+
+  // Comptes par périodes
+  try {
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const lastWeekDate = subWeeks(now, 1);
+    const lastWeekStart = startOfWeek(lastWeekDate, { weekStartsOn: 1 });
+    const lastWeekEnd = endOfWeek(lastWeekDate, { weekStartsOn: 1 });
+
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
+    const lastMonthDate = subMonths(now, 1);
+    const lastMonthStart = startOfMonth(lastMonthDate);
+    const lastMonthEnd = endOfMonth(lastMonthDate);
+
+    const yearStart = startOfYear(now);
+    const yearEnd = endOfYear(now);
+
+    const countInRange = (start, end) =>
+      Message.count({
+        where: {
+          sender_type: "girl",
+          sender_id: adminId,
+          createdAt: { [Op.between]: [start, end] },
+        },
+      });
+
+    const [currentWeek, lastWeek, currentMonth, lastMonth, currentYear] =
+      await Promise.all([
+        countInRange(weekStart, weekEnd),
+        countInRange(lastWeekStart, lastWeekEnd),
+        countInRange(monthStart, monthEnd),
+        countInRange(lastMonthStart, lastMonthEnd),
+        countInRange(yearStart, yearEnd),
       ]);
 
-      // Bloc 2 : par admin
-      const admins = await Admin.findAll({
-        where: { role: "admin" },
-        attributes: ["id", "nom", "prenom"],
-        include: [
-          {
-            model: AdminGirl,
-            include: [{ model: Girl }],
-          },
-        ],
-      });
+    return res.json({
+      totalMessagesSent: total,
+      statsByHourRange: stats,
+      periodCounts: {
+        currentWeek,
+        lastWeek,
+        currentMonth,
+        lastMonth,
+        currentYear,
+      },
+    });
+  } catch (e) {
+    console.error("Erreur calcul des périodes:", e);
+    return res.json({
+      totalMessagesSent: total,
+      statsByHourRange: stats,
+      periodCounts: {
+        currentWeek: 0,
+        lastWeek: 0,
+        currentMonth: 0,
+        lastMonth: 0,
+        currentYear: 0,
+      },
+    });
+  }
+}
 
-      const adminStats = [];
-
-      for (const admin of admins) {
-        const girlIds = admin.AdminGirls.map((ag) => ag.girl_id);
-
-        const [envoyes, reçus, cette_semaine] = await Promise.all([
-          Message.count({
-            where: {
-              sender_type: "girl",
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-          Message.count({
-            where: {
-              sender_type: "client",
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-          Message.count({
-            where: {
-              sender_type: "girl",
-              createdAt: { [Op.gte]: weekStart },
-              "$Conversation.girl_id$": { [Op.in]: girlIds },
-            },
-            include: [{ model: Conversation }],
-          }),
-        ]);
-
-        adminStats.push({
-          admin_id: admin.id,
-          admin_nom: `${admin.prenom} ${admin.nom}`,
-          messages_envoyes: envoyes,
-          messages_recus: reçus,
-          messages_cette_semaine: cette_semaine,
-        });
-      }
-
-      res.json({
-        global: {
-          total_messages,
-          messages_today,
-          messages_this_week,
-          total_credits_used: Math.abs(total_credits || 0),
-        },
-        per_admin: adminStats,
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Erreur lors du calcul des stats." });
-    }
-  },
+module.exports = {
+  getAdminStats,
 };

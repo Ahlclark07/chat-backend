@@ -2,6 +2,8 @@ const bcrypt = require("bcrypt");
 const { Client, RefreshToken } = require("../../models");
 const { generateAccessToken, generateRefreshToken } = require("../utils/token");
 const { Op } = require("sequelize");
+const { sendMail } = require("../services/mail.service");
+const { renderWelcomeClient } = require("../services/mailTemplates");
 
 // Durée d'expiration (à harmoniser avec utils/token.js si tu veux)
 const REFRESH_EXPIRES_DAYS = 7;
@@ -19,6 +21,7 @@ module.exports = {
         pays_id,
         ville_id,
         sexe,
+        attirance,
         description,
         telephone,
       } = req.body;
@@ -32,6 +35,11 @@ module.exports = {
 
       const hashedPassword = await bcrypt.hash(mot_de_passe, 10);
 
+      // Validate attirance values
+      const allowedAttirance = ["femme", "homme", "tous"]; 
+      const normalizedAttirance =
+        attirance && allowedAttirance.includes(attirance) ? attirance : "tous";
+
       const client = await Client.create({
         nom,
         prenom,
@@ -43,9 +51,19 @@ module.exports = {
         pays_id,
         ville_id,
         sexe,
+        attirance: normalizedAttirance,
         telephone,
         credit_balance: 100,
       });
+
+      // Send welcome email (non-blocking)
+      try {
+        const emailTpl = renderWelcomeClient({ client: { prenom, nom } });
+        if (email) {
+          const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+          sendMail({ to: email, subject: emailTpl.subject, html: emailTpl.html, text: emailTpl.text, from }).catch(() => {});
+        }
+      } catch (_) {}
 
       // Récupérer les infos complètes avec relations
       const fullClient = await Client.findByPk(client.id, {
@@ -195,6 +213,7 @@ module.exports = {
         pays_id,
         ville_id,
         description,
+        attirance,
         telephone,
       } = req.body;
       console.log(req.user);
@@ -205,7 +224,7 @@ module.exports = {
         return res.status(404).json({ message: "Client introuvable." });
       }
 
-      await client.update({
+      const updates = {
         nom,
         prenom,
         date_naissance,
@@ -214,7 +233,17 @@ module.exports = {
         description,
         telephone,
         ...(photo_profil && { photo_profil }),
-      });
+      };
+
+      if (typeof attirance !== "undefined") {
+        const allowed = ["femme", "homme", "tous"]; 
+        if (!allowed.includes(attirance)) {
+          return res.status(400).json({ message: "Valeur d'attirance invalide." });
+        }
+        updates.attirance = attirance;
+      }
+
+      await client.update(updates);
 
       const updatedClient = await Client.findByPk(client.id, {
         attributes: { exclude: ["mot_de_passe"] },

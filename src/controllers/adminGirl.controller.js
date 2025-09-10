@@ -6,6 +6,8 @@ const {
   GirlPhoto,
   AdminActivityLog,
 } = require("../../models");
+const path = require("path");
+const fs = require("fs");
 
 module.exports = {
   // 1️⃣ Créer un profil Girl
@@ -91,7 +93,6 @@ module.exports = {
       girl.pays_id = pays_id ?? girl.pays_id;
       girl.ville_id = ville_id ?? girl.ville_id;
       girl.admin_id = admin_id ?? girl.admin_id;
-      console.log(req.body);
       // Photo de profil (si nouvelle image)
       if (req.files.photo_profil) {
         girl.photo_profil = req.files.photo_profil[0].filename;
@@ -145,13 +146,7 @@ module.exports = {
   },
   getPaginatedSummary: async (req, res) => {
     try {
-      const page = parseInt(req.query.page, 10) || 1;
-      const limit = 20;
-      const offset = (page - 1) * limit;
-
       const girls = await Girl.findAndCountAll({
-        limit,
-        offset,
         order: [["createdAt", "DESC"]],
         include: [
           { model: City, as: "ville", attributes: ["name"] },
@@ -162,8 +157,6 @@ module.exports = {
 
       res.json({
         total: girls.count,
-        page,
-        totalPages: Math.ceil(girls.count / limit),
         data: girls.rows,
       });
     } catch (err) {
@@ -188,6 +181,47 @@ module.exports = {
       if (!girl) {
         return res.status(404).json({ message: "Girl non trouvée." });
       }
+
+      // Supprimer les photos de galerie sur le disque
+      const photos = await GirlPhoto.findAll({ where: { girl_id: girlId } });
+      for (const p of photos) {
+        const filePath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          "girls",
+          p.url
+        );
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {
+          console.warn("Suppression photo galerie échouée:", filePath);
+        }
+      }
+      // Supprimer la photo de profil si présente
+      if (girl.photo_profil) {
+        const pp = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          "girls",
+          girl.photo_profil
+        );
+        try {
+          if (fs.existsSync(pp)) {
+            fs.unlinkSync(pp);
+          }
+        } catch (e) {
+          console.warn("Suppression photo profil échouée:", pp);
+        }
+      }
+
+      // Nettoyage DB des entrées de galerie (au cas où les FK ne sont pas en cascade)
+      await GirlPhoto.destroy({ where: { girl_id: girlId } });
 
       await girl.destroy();
 

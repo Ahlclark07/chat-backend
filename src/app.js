@@ -39,10 +39,18 @@ const adminStatsRoutes = require("./routes/adminStats.route");
 app.use("/api/admin", adminStatsRoutes);
 const adminLogRoutes = require("./routes/adminLog.route");
 app.use("/api/admin", adminLogRoutes);
+app.use("/api/admin", require("./routes/settings.route"));
+app.use("/api/admin", require("./routes/autoMessage.route"));
+app.use("/api/admin", require("./routes/forbiddenWord.route"));
 const locationsRoute = require("./routes/location.route");
 app.use("/api/locations", locationsRoute);
+const creditRoutes = require("./routes/credit.route");
+app.use("/api/credits", creditRoutes);
+app.use("/api/filters", require("./routes/filter.route"));
 app.use("/api/conversations", require("./routes/conversationNote.route"));
 app.use("/api/conversations", require("./routes/conversation.route"));
 app.use("/api/favorites", require("./routes/favorite.route"));
+// Test routes
+app.use("/api/test", require("./routes/test.route"));
 
 module.exports = app;

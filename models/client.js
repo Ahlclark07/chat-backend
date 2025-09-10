@@ -36,12 +36,17 @@ module.exports = (sequelize, DataTypes) => {
       is_banned: DataTypes.BOOLEAN,
       ban_reason: DataTypes.STRING,
       ban_expires_at: DataTypes.DATE,
+      last_login: DataTypes.DATE,
       description: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
       sexe: {
         type: DataTypes.ENUM("homme", "femme"),
+        allowNull: true,
+      },
+      attirance: {
+        type: DataTypes.ENUM("femme", "homme", "tous"),
         allowNull: true,
       },
     },

@@ -2,11 +2,19 @@
 const {
   getConversationsForClient,
 } = require("../services/conversation.service");
+const Client = require("../../models/client");
+const { initMessageDispatcher } = require("./messages-dispatcher");
+
 const connectedClients = new Map(); // socket.id -> clientId
-const clientIdToSocketId = new Map(); // clientId -> socket.id (utile pour le controller)
+const clientIdToSocketId = new Map(); // clientId -> socket.id
 
 function setupSocket(server) {
-  const io = require("socket.io")(server, { cors: { origin: "*" } });
+  const io = require("socket.io")(server, {
+    cors: { origin: "*" },
+  });
+
+  // Branchement du dispatcher des messages admin
+  initMessageDispatcher(io);
 
   io.on("connection", (socket) => {
     console.log("🔌 Client connecté:", socket.id);
@@ -31,12 +39,15 @@ function setupSocket(server) {
       if (clientId) {
         clientIdToSocketId.delete(clientId);
       }
+      // Client.update({ last_login: new Date() }, { where: { id: clientId } });
     });
   });
-
-  // Exposer les maps pour y accéder dans les controllers io.connectedClients = connectedClients; io.clientIdToSocketId = clientIdToSocketId;
 
   return io;
 }
 
-module.exports = { setupSocket };
+module.exports = {
+  connectedClients,
+  clientIdToSocketId,
+  setupSocket,
+};
