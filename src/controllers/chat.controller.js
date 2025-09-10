@@ -10,6 +10,8 @@ const { handleClientMessage } = require("../sockets/messages-dispatcher");
 const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
+const { findForbiddenWordsIn } = require("../utils/forbiddenWords.util");
+const { notifyForbiddenWordAlert } = require("../services/alert.service");
 // GET /chat/conversations
 module.exports.getClientConversations = async (req, res) => {
   try {
@@ -77,6 +79,20 @@ module.exports.sendMessage = async (req, res) => {
       body,
       media_url: mediaPath,
     });
+    // Forbidden words alert (client message)
+    if (body) {
+      try {
+        const matched = await findForbiddenWordsIn(body);
+        if (matched.length > 0) {
+          notifyForbiddenWordAlert({
+            conversationId: conversation.id,
+            senderType: "client",
+            messageBody: body,
+            matchedWords: matched,
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
     const client = await Client.findByPk(clientId);
     // Coût paramétrable par Setting (défaut 1)
     const { Setting } = require("../../models");

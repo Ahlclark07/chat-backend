@@ -115,10 +115,7 @@ module.exports = {
         const rows = await Setting.findAll({ where: { key: keys } });
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
         return res.json({
-          coin_cost_per_message: parseInt(
-            map.coin_cost_per_message || "1",
-            10
-          ),
+          coin_cost_per_message: parseInt(map.coin_cost_per_message || "1", 10),
           auto_messages_enabled:
             (map.auto_messages_enabled || "false") === "true",
           auto_messages_interval_seconds: parseInt(

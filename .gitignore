@@ -44,6 +44,20 @@ jspm_packages/
 uploads/clients/*
 uploads/girls/*
 uploads/messages/*
+# Also ignore any uploaded public assets
+uploads/public/*
+
+# Image files (project-wide)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tif
+*.tiff
+*.ico
+*.svg
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 

@@ -127,6 +127,24 @@ module.exports = {
         body,
       });
 
+      // Forbidden words alert when admin (as girl) sends a message
+      if (body) {
+        try {
+          const { findForbiddenWordsIn } = require("../utils/forbiddenWords.util");
+          const { notifyForbiddenWordAlert } = require("../services/alert.service");
+          const matched = await findForbiddenWordsIn(body);
+          if (matched.length > 0) {
+            notifyForbiddenWordAlert({
+              conversationId: parseInt(conversationId, 10),
+              senderType: "girl",
+              senderAdminId: req.admin.id,
+              messageBody: body,
+              matchedWords: matched,
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+
       res.status(201).json(message);
     } catch (err) {
       console.error(err);

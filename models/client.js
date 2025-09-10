@@ -45,6 +45,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM("homme", "femme"),
         allowNull: true,
       },
+      attirance: {
+        type: DataTypes.ENUM("femme", "homme", "tous"),
+        allowNull: true,
+      },
     },
     {
       sequelize,
