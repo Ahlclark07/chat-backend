@@ -13,19 +13,21 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: "conversations",
+          model: "Conversations",
           key: "id",
         },
         onDelete: "CASCADE",
+        onUpdate: "CASCADE",
       },
       admin_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: "admins",
+          model: "Admins",
           key: "id",
         },
         onDelete: "CASCADE",
+        onUpdate: "CASCADE",
       },
       contenu: {
         type: Sequelize.TEXT,
@@ -42,9 +44,15 @@ module.exports = {
         defaultValue: Sequelize.fn("NOW"),
       },
     });
+    await queryInterface.addIndex("ConversationNotes", ["conversation_id"], {
+      name: "idx_conversationnotes_conversation_id",
+    });
+    await queryInterface.addIndex("ConversationNotes", ["admin_id"], {
+      name: "idx_conversationnotes_admin_id",
+    });
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable("ConversationNote");
+    await queryInterface.dropTable("ConversationNotes");
   },
 };
