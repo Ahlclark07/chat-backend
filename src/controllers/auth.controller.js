@@ -60,7 +60,8 @@ module.exports = {
       try {
         const emailTpl = renderWelcomeClient({ client: { prenom, nom } });
         if (email) {
-          sendMail({ to: email, subject: emailTpl.subject, html: emailTpl.html, text: emailTpl.text }).catch(() => {});
+          const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+          sendMail({ to: email, subject: emailTpl.subject, html: emailTpl.html, text: emailTpl.text, from }).catch(() => {});
         }
       } catch (_) {}
 

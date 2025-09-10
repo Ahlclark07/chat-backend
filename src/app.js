@@ -50,5 +50,7 @@ app.use("/api/filters", require("./routes/filter.route"));
 app.use("/api/conversations", require("./routes/conversationNote.route"));
 app.use("/api/conversations", require("./routes/conversation.route"));
 app.use("/api/favorites", require("./routes/favorite.route"));
+// Test routes
+app.use("/api/test", require("./routes/test.route"));
 
 module.exports = app;
