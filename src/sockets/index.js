@@ -10,7 +10,9 @@ const clientIdToSocketId = new Map(); // clientId -> socket.id
 
 function setupSocket(server) {
   const io = require("socket.io")(server, {
-    cors: { origin: "*" },
+    cors: {
+      origin: "*",
+    },
   });
 
   // Branchement du dispatcher des messages admin
