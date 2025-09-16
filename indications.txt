@@ -1,0 +1,93 @@
+PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
+
+> c-backend@1.0.0 dev
+> nodemon src/server.js
+
+[nodemon] 3.1.10
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `node src/server.js`
+C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96
+            throw new PathError(`Missing parameter name at index ${index}`, str);
+            ^
+
+PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
+    at name (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96:19)
+    at parse (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:113:68)
+    at pathToRegexp (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:267:58)
+    at Object.match (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:237:30)
+    at matcher (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:86:23)
+    at new Layer (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:93:62)
+0:5) {
+  originalPath: '*'
+}
+
+Node.js v22.16.0
+[nodemon] app crashed - waiting for file changes before starting...
+PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> ^C
+PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
+
+> c-backend@1.0.0 dev
+> nodemon src/server.js
+
+[nodemon] 3.1.10
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `node src/server.js`
+❌ Erreur de connexion à la base de données : ConnectionRefusedError [SequelizeConnectionRefusedError]
+    at ConnectionManager.connect (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\mysql\connection-manager.js:92:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async ConnectionManager._connect (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:222:24)
+    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:174:32
+    at async ConnectionManager.getConnection (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:197:7)
+    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:305:26
+    at async Sequelize.authenticate (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:457:5)
+    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\server.js:16:5 {
+  parent: AggregateError [ECONNREFUSED]:
+      at internalConnectMultiple (node:net:1139:18)
+      at afterConnectMultiple (node:net:1714:7) {
+    code: 'ECONNREFUSED',
+    fatal: true,
+    [errors]: [ [Error], [Error] ]
+  },
+  original: AggregateError [ECONNREFUSED]:
+      at internalConnectMultiple (node:net:1139:18)
+      at afterConnectMultiple (node:net:1714:7) {
+    code: 'ECONNREFUSED',
+    fatal: true,
+    [errors]: [ [Error], [Error] ]
+  }
+}
+[nodemon] app crashed - waiting for file changes before starting...
+PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
+
+> c-backend@1.0.0 dev
+> nodemon src/server.js
+
+[nodemon] 3.1.10
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `node src/server.js`
+C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96
+            throw new PathError(`Missing parameter name at index ${index}`, str);
+            ^
+
+PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
+    at name (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96:19)
+    at parse (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:113:68)
+    at pathToRegexp (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:267:58)
+    at Object.match (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:237:30)
+    at matcher (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:86:23)      
+    at new Layer (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:93:62)    
+    at Function.route (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\index.js:428:17)  
+    at Function.route (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\express\lib\application.js:257:22)
+    at app.<computed> [as options] (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\express\lib\application.js:478:22)
+    at Object.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\app.js:34:5) {
+  originalPath: '*'
+}
+
+Node.js v22.16.0
+[nodemon] app crashed - waiting for file changes before starting...
