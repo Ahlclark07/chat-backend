@@ -20,6 +20,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "admin_id",
         as: "roles",
       });
+      Admin.hasMany(models.Signalement, {
+        foreignKey: "admin_id",
+        as: "signalements",
+      });
     }
   }
 

@@ -211,4 +211,40 @@ module.exports = {
       res.status(500).json({ message: "Erreur lors de la suspension." });
     }
   },
+  updatePassword: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { new_password } = req.body;
+      const requesterRole = req.admin.role;
+
+      if (typeof new_password !== "string" || new_password.trim().length < 6) {
+        return res.status(400).json({
+          message: "Le nouveau mot de passe doit contenir au moins 6 caractères.",
+        });
+      }
+
+      const target = await Admin.findByPk(id);
+      if (!target) {
+        return res.status(404).json({ message: "Admin introuvable." });
+      }
+
+      if (requesterRole === "superadmin" && target.role !== "admin") {
+        return res.status(403).json({
+          message: "Tu ne peux modifier que le mot de passe des admins.",
+        });
+      }
+
+      if (requesterRole !== "god" && requesterRole !== "superadmin") {
+        return res.status(403).json({ message: "Accès refusé." });
+      }
+
+      const hashed = await bcrypt.hash(new_password.trim(), 10);
+      await target.update({ mot_de_passe: hashed });
+
+      return res.json({ message: "Mot de passe mis à jour avec succès." });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Erreur lors de la mise à jour du mot de passe." });
+    }
+  },
 };

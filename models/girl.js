@@ -32,15 +32,23 @@ module.exports = (sequelize, DataTypes) => {
     {
       nom: DataTypes.STRING,
       prenom: DataTypes.STRING,
+      pseudo: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true,
+      },
       date_naissance: DataTypes.DATEONLY,
       photo_profil: DataTypes.STRING,
       description: DataTypes.TEXT,
       pays_id: DataTypes.INTEGER,
       ville_id: DataTypes.INTEGER,
-      telephone: DataTypes.STRING,
+      telephone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       is_banned: DataTypes.BOOLEAN,
       ban_reason: DataTypes.STRING,
-      created_by: DataTypes.INTEGER, // superadmin/god qui a créé
+      created_by: DataTypes.INTEGER, // superadmin/god createur
       admin_id: DataTypes.INTEGER, // admin responsable
       ban_expires_at: DataTypes.DATE,
       sexe: {
@@ -56,3 +64,4 @@ module.exports = (sequelize, DataTypes) => {
 
   return Girl;
 };
+

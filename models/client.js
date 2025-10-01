@@ -25,6 +25,11 @@ module.exports = (sequelize, DataTypes) => {
     {
       nom: DataTypes.STRING,
       prenom: DataTypes.STRING,
+      pseudo: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true,
+      },
       email: DataTypes.STRING,
       mot_de_passe: DataTypes.STRING,
       date_naissance: DataTypes.DATEONLY,
@@ -58,3 +63,4 @@ module.exports = (sequelize, DataTypes) => {
 
   return Client;
 };
+
