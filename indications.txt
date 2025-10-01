@@ -1,93 +1,86 @@
-PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
-
-> c-backend@1.0.0 dev
-> nodemon src/server.js
-
-[nodemon] 3.1.10
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): *.*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `node src/server.js`
-C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96
-            throw new PathError(`Missing parameter name at index ${index}`, str);
-            ^
-
-PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
-    at name (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96:19)
-    at parse (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:113:68)
-    at pathToRegexp (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:267:58)
-    at Object.match (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:237:30)
-    at matcher (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:86:23)
-    at new Layer (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:93:62)
-0:5) {
-  originalPath: '*'
-}
-
-Node.js v22.16.0
-[nodemon] app crashed - waiting for file changes before starting...
-PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> ^C
-PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
-
-> c-backend@1.0.0 dev
-> nodemon src/server.js
-
-[nodemon] 3.1.10
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): *.*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `node src/server.js`
-❌ Erreur de connexion à la base de données : ConnectionRefusedError [SequelizeConnectionRefusedError]
-    at ConnectionManager.connect (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\mysql\connection-manager.js:92:17)
+Error
+    at Query.run (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\mysql\query.js:52:25)      
+    at C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:315:28
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async ConnectionManager._connect (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:222:24)
-    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:174:32
-    at async ConnectionManager.getConnection (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\connection-manager.js:197:7)
-    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:305:26
-    at async Sequelize.authenticate (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:457:5)
-    at async C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\server.js:16:5 {
-  parent: AggregateError [ECONNREFUSED]:
-      at internalConnectMultiple (node:net:1139:18)
-      at afterConnectMultiple (node:net:1714:7) {
-    code: 'ECONNREFUSED',
-    fatal: true,
-    [errors]: [ [Error], [Error] ]
+    at async MySQLQueryInterface.select (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\query-interface.js:407:12)
+    at async Client.findAll (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\model.js:1140:21)        
+    at async Promise.all (index 1)
+    at async Client.findAndCountAll (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\model.js:1322:27)
+    at async listClients (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\controllers\adminClient.controller.js:78:23) {     
+  name: 'SequelizeDatabaseError',
+  parent: Error: Champ 'Clients.id' inconnu dans where clause
+      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)       
+      at Query.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)       
+      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
+      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
+      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
+      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)  
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+      at Readable.push (node:internal/streams/readable:392:5) {
+    code: 'ER_BAD_FIELD_ERROR',
+    errno: 1054,
+    sqlState: '42S22',
+    sqlMessage: "Champ 'Clients.id' inconnu dans where clause",
+    sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
+      '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
+      '      FROM CreditTransactions AS ct\n' +
+      '      WHERE ct.client_id = Clients.id\n' +
+      '    ) AS `credits_spent`, (\n' +
+      '      SELECT COUNT(*)\n' +
+      '      FROM Conversations AS conv\n' +
+      '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
+      '    ) AS `active_conversations`, (\n' +
+      '      SELECT COUNT(*)\n' +
+      '      FROM Conversations AS conv_all\n' +
+      '      WHERE conv_all.client_id = Clients.id\n' +
+      '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
+    parameters: undefined
   },
-  original: AggregateError [ECONNREFUSED]:
-      at internalConnectMultiple (node:net:1139:18)
-      at afterConnectMultiple (node:net:1714:7) {
-    code: 'ECONNREFUSED',
-    fatal: true,
-    [errors]: [ [Error], [Error] ]
-  }
+  original: Error: Champ 'Clients.id' inconnu dans where clause
+      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)       
+      at Query.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)       
+      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
+      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
+      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
+      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)  
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+      at Readable.push (node:internal/streams/readable:392:5) {
+    code: 'ER_BAD_FIELD_ERROR',
+    errno: 1054,
+    sqlState: '42S22',
+    sqlMessage: "Champ 'Clients.id' inconnu dans where clause",
+    sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
+      '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
+      '      FROM CreditTransactions AS ct\n' +
+      '      WHERE ct.client_id = Clients.id\n' +
+      '    ) AS `credits_spent`, (\n' +
+      '      SELECT COUNT(*)\n' +
+      '      FROM Conversations AS conv\n' +
+      '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
+      '    ) AS `active_conversations`, (\n' +
+      '      SELECT COUNT(*)\n' +
+      '      FROM Conversations AS conv_all\n' +
+      '      WHERE conv_all.client_id = Clients.id\n' +
+      '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
+    parameters: undefined
+  },
+  sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
+    '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
+    '      FROM CreditTransactions AS ct\n' +
+    '      WHERE ct.client_id = Clients.id\n' +
+    '    ) AS `credits_spent`, (\n' +
+    '      SELECT COUNT(*)\n' +
+    '      FROM Conversations AS conv\n' +
+    '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
+    '    ) AS `active_conversations`, (\n' +
+    '      SELECT COUNT(*)\n' +
+    '      FROM Conversations AS conv_all\n' +
+    '      WHERE conv_all.client_id = Clients.id\n' +
+    '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
+  parameters: {}
 }
-[nodemon] app crashed - waiting for file changes before starting...
-PS C:\Users\HP GAMER\Desktop\c-workspace\c-backend> npm run dev
-
-> c-backend@1.0.0 dev
-> nodemon src/server.js
-
-[nodemon] 3.1.10
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): *.*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `node src/server.js`
-C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96
-            throw new PathError(`Missing parameter name at index ${index}`, str);
-            ^
-
-PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
-    at name (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:96:19)
-    at parse (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:113:68)
-    at pathToRegexp (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:267:58)
-    at Object.match (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\path-to-regexp\dist\index.js:237:30)
-    at matcher (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:86:23)      
-    at new Layer (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\lib\layer.js:93:62)    
-    at Function.route (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\router\index.js:428:17)  
-    at Function.route (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\express\lib\application.js:257:22)
-    at app.<computed> [as options] (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\express\lib\application.js:478:22)
-    at Object.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\app.js:34:5) {
-  originalPath: '*'
-}
-
-Node.js v22.16.0
-[nodemon] app crashed - waiting for file changes before starting...
+GET /api/admin/clients?page=1&limit=10 500 11.845 ms - 52

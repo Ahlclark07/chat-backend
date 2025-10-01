@@ -1,4 +1,4 @@
-const { ConversationNote } = require("../../models");
+const { ConversationNote, Admin } = require("../../models");
 
 module.exports = {
   async createNote(req, res) {
@@ -12,7 +12,17 @@ module.exports = {
         contenu,
       });
 
-      res.status(201).json(note);
+      const hydratedNote = await ConversationNote.findByPk(note.id, {
+        include: [
+          {
+            model: Admin,
+            as: "admin",
+            attributes: ["id", "nom", "prenom", "email", "identifiant", "role"],
+          },
+        ],
+      });
+
+      res.status(201).json(hydratedNote);
     } catch (error) {
       console.error(error);
       res
@@ -28,6 +38,13 @@ module.exports = {
       const notes = await ConversationNote.findAll({
         where: { conversation_id },
         order: [["createdAt", "ASC"]],
+        include: [
+          {
+            model: Admin,
+            as: "admin",
+            attributes: ["id", "nom", "prenom", "email", "identifiant", "role"],
+          },
+        ],
       });
 
       res.json(notes);

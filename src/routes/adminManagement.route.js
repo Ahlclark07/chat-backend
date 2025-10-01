@@ -41,4 +41,11 @@ router.patch(
   controller.suspendAdmin
 );
 
+router.patch(
+  "/:id/password",
+  authenticateAdminJWT,
+  authorizeRole("god", "superadmin"),
+  controller.updatePassword
+);
+
 module.exports = router;

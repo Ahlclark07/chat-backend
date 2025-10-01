@@ -8,9 +8,33 @@ const {
 } = require("../../models");
 const path = require("path");
 const fs = require("fs");
+const { Op } = require("sequelize");
+
+const normalizeOptionalString = (value) => {
+  if (typeof value !== "string") {
+    return value ?? null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const logAdminAction = async ({ adminId, action, targetId, details }) => {
+  try {
+    await AdminActivityLog.create({
+      admin_id: adminId,
+      adminId,
+      action,
+      target_type: "Girl",
+      targetType: "Girl",
+      target_id: targetId,
+      targetId,
+      details,
+    });
+  } catch (_) {}
+};
 
 module.exports = {
-  // 1️⃣ Créer un profil Girl
+  // Créer un profil Girl
   createGirl: async (req, res) => {
     try {
       const {
@@ -22,9 +46,19 @@ module.exports = {
         ville_id,
         sexe,
         telephone,
-        admin_id, // 👈 maintenant autorisé dans le body
+        pseudo,
+        admin_id, // maintenant autorisé dans le body
       } = req.body;
       console.log(req.files);
+
+      const normalizedPseudo = normalizeOptionalString(pseudo);
+      if (normalizedPseudo) {
+        const existingPseudo = await Girl.findOne({ where: { pseudo: normalizedPseudo } });
+        if (existingPseudo) {
+          return res.status(400).json({ message: "Pseudo deja utilise." });
+        }
+      }
+
       const girl = await Girl.create({
         nom,
         prenom,
@@ -33,12 +67,11 @@ module.exports = {
         pays_id,
         ville_id,
         sexe,
-        telephone,
-        photo_profil: req.files.photo_profil[0]
-          ? req.files.photo_profil[0].filename
-          : null,
-        created_by: req.admin.id, // 👈 superadmin ou god créateur
-        admin_id: admin_id || null, // 👈 admin assigné
+        telephone: normalizeOptionalString(telephone),
+        pseudo: normalizedPseudo,
+        photo_profil: req.files?.photo_profil?.[0]?.filename || null,
+        created_by: req.admin.id, // superadmin ou god créateur
+        admin_id: admin_id || null, // admin assigné
       });
 
       if (req.files?.photos?.length) {
@@ -50,13 +83,11 @@ module.exports = {
         await GirlPhoto.bulkCreate(photoData);
       }
 
-      await AdminActivityLog.create({
+      await logAdminAction({
         adminId: req.admin.id,
         action: "CREATE_GIRL",
-        targetType: "Girl",
         targetId: girl.id,
-        details: `nom: ${girl.nom},
-          prenom: ${girl.prenom}`,
+        details: "nom: " + girl.nom + ", prenom: " + girl.prenom,
       });
 
       res.status(201).json(girl);
@@ -64,13 +95,16 @@ module.exports = {
       console.error(err);
       res
         .status(500)
-        .json({ message: "Erreur lors de la création de la Girl." });
+        .json({ message: "Erreur lors de la creation de la Girl." });
     }
   },
 
   updateGirl: async (req, res) => {
     try {
-      const girlId = req.params.id;
+      const girlId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(girlId)) {
+        return res.status(400).json({ message: "Identifiant invalide" });
+      }
       const {
         nom,
         prenom,
@@ -80,6 +114,8 @@ module.exports = {
         ville_id,
         admin_id,
         sexe,
+        telephone,
+        pseudo,
       } = req.body;
 
       const girl = await Girl.findByPk(girlId);
@@ -93,20 +129,37 @@ module.exports = {
       girl.pays_id = pays_id ?? girl.pays_id;
       girl.ville_id = ville_id ?? girl.ville_id;
       girl.admin_id = admin_id ?? girl.admin_id;
+      if (typeof sexe !== "undefined") {
+        girl.sexe = sexe;
+      }
+      if (typeof pseudo !== "undefined") {
+        const normalizedPseudoUpdate = normalizeOptionalString(pseudo);
+        if (normalizedPseudoUpdate) {
+          const existingPseudo = await Girl.findOne({
+            where: { pseudo: normalizedPseudoUpdate, id: { [Op.ne]: girlId } },
+          });
+          if (existingPseudo) {
+            return res.status(400).json({ message: "Pseudo deja utilise." });
+          }
+        }
+        girl.pseudo = normalizedPseudoUpdate;
+      }
+      if (typeof telephone !== "undefined") {
+        girl.telephone = normalizeOptionalString(telephone);
+      }
+
       // Photo de profil (si nouvelle image)
-      if (req.files.photo_profil) {
+      if (req.files?.photo_profil) {
         girl.photo_profil = req.files.photo_profil[0].filename;
       }
 
       await girl.save();
 
-      await AdminActivityLog.create({
+      await logAdminAction({
         adminId: req.admin.id,
         action: "UPDATE_GIRL",
-        targetType: "Girl",
         targetId: girl.id,
-        details: `nom: ${girl.nom},
-          prenom: ${girl.prenom}`,
+        details: "nom: " + girl.nom + ", prenom: " + girl.prenom,
       });
 
       res.status(200).json(girl);
@@ -118,7 +171,7 @@ module.exports = {
     }
   },
 
-  // 2️⃣ Assigner une girl à un admin
+  // Assigner une girl à un admin
   assignGirlToAdmin: async (req, res) => {
     try {
       const { id: girl_id } = req.params;
@@ -225,13 +278,11 @@ module.exports = {
 
       await girl.destroy();
 
-      await AdminActivityLog.create({
+      await logAdminAction({
         adminId: req.admin.id,
         action: "DELETE_GIRL",
-        targetType: "Girl",
         targetId: girl.id,
-        details: `nom: ${girl.nom},
-          prenom: ${girl.prenom}`,
+        details: "nom: " + girl.nom + ", prenom: " + girl.prenom,
       });
       res.status(200).json({ message: "Girl supprimée avec succès." });
     } catch (error) {

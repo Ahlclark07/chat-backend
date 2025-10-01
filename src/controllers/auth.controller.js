@@ -15,6 +15,7 @@ module.exports = {
       const {
         nom,
         prenom,
+        pseudo,
         email,
         mot_de_passe,
         date_naissance,
@@ -35,6 +36,18 @@ module.exports = {
 
       const hashedPassword = await bcrypt.hash(mot_de_passe, 10);
 
+      const normalizedPseudo =
+        typeof pseudo === "string" ? pseudo.trim() : null;
+
+      if (normalizedPseudo) {
+        const existingPseudoClient = await Client.findOne({
+          where: { pseudo: normalizedPseudo },
+        });
+        if (existingPseudoClient) {
+          return res.status(400).json({ message: "Pseudo deja utilise." });
+        }
+      }
+
       // Validate attirance values
       const allowedAttirance = ["femme", "homme", "tous"]; 
       const normalizedAttirance =
@@ -43,6 +56,7 @@ module.exports = {
       const client = await Client.create({
         nom,
         prenom,
+        pseudo: normalizedPseudo,
         email,
         mot_de_passe: hashedPassword,
         date_naissance,
@@ -209,6 +223,7 @@ module.exports = {
       const {
         nom,
         prenom,
+        pseudo,
         date_naissance,
         pays_id,
         ville_id,
@@ -234,6 +249,26 @@ module.exports = {
         telephone,
         ...(photo_profil && { photo_profil }),
       };
+
+      if (typeof pseudo !== "undefined") {
+        const normalizedPseudoUpdate =
+          typeof pseudo === "string" ? pseudo.trim() : null;
+        if (normalizedPseudoUpdate) {
+          const existingPseudoClient = await Client.findOne({
+            where: {
+              pseudo: normalizedPseudoUpdate,
+              id: { [Op.ne]: clientId },
+            },
+          });
+          if (existingPseudoClient) {
+            return res.status(400).json({ message: "Pseudo deja utilise." });
+          }
+        }
+        updates.pseudo =
+          normalizedPseudoUpdate && normalizedPseudoUpdate.length > 0
+            ? normalizedPseudoUpdate
+            : null;
+      }
 
       if (typeof attirance !== "undefined") {
         const allowed = ["femme", "homme", "tous"]; 

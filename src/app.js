@@ -1,6 +1,7 @@
 const express = require("express");
 const morgan = require("morgan");
 const dotenv = require("dotenv");
+const cors = require("cors");
 const { sequelize } = require("../models");
 const path = require("path");
 
@@ -8,21 +9,24 @@ dotenv.config();
 
 const app = express();
 
-// =========================
-// CORS middleware (allow all)
-// =========================
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Origin",
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
+    "Authorization",
+  ],
+};
+
+app.use(cors());
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  return next();
 });
 
 // =========================
@@ -56,7 +60,9 @@ const adminDashRoutes = require("./routes/admin.route");
 app.use("/api/admin", adminDashRoutes);
 
 const girlRoutes = require("./routes/adminGirl.route");
+const adminClientRoutes = require("./routes/adminClient.route");
 app.use("/api/admin", girlRoutes);
+app.use("/api/admin", adminClientRoutes);
 
 const adminManagementRoutes = require("./routes/adminManagement.route");
 app.use("/api/admin-management", adminManagementRoutes);
@@ -70,6 +76,7 @@ app.use("/api/admin", adminLogRoutes);
 app.use("/api/admin", require("./routes/settings.route"));
 app.use("/api/admin", require("./routes/autoMessage.route"));
 app.use("/api/admin", require("./routes/forbiddenWord.route"));
+app.use("/api/admin", require("./routes/signalement.route"));
 
 const locationsRoute = require("./routes/location.route");
 app.use("/api/locations", locationsRoute);
