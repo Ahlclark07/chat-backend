@@ -18,6 +18,14 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "client_id",
         as: "refresh_tokens",
       });
+      Client.hasMany(models.AutoMessageDelivery, {
+        foreignKey: "client_id",
+        as: "autoMessageDeliveries",
+      });
+      Client.hasMany(models.ClientActivationToken, {
+        foreignKey: "client_id",
+        as: "activationTokens",
+      });
     }
   }
 
@@ -38,6 +46,11 @@ module.exports = (sequelize, DataTypes) => {
       ville_id: DataTypes.INTEGER,
       telephone: DataTypes.STRING,
       credit_balance: DataTypes.INTEGER,
+      is_active: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       is_banned: DataTypes.BOOLEAN,
       ban_reason: DataTypes.STRING,
       ban_expires_at: DataTypes.DATE,
@@ -63,4 +76,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return Client;
 };
-

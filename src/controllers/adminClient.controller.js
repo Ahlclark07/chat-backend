@@ -1,7 +1,7 @@
 const db = require("../../models");
 const { Op } = require("sequelize");
 
-const { Client, Conversation, CreditTransaction, AdminActivityLog } = db;
+const { Client, Conversation, CreditTransaction, AdminActivityLog, SuspensionReason } = db;
 const { sequelize } = db;
 
 const CLIENT_ID_REF = 'Client.id';
@@ -213,6 +213,19 @@ module.exports = {
 
       await client.update(updates);
 
+      // Log suspension reason when banning
+      if (desiredStatus === true) {
+        try {
+          await SuspensionReason.create({
+            user_type: 'Client',
+            user_id: client.id,
+            suspended_by_id: req.admin.id,
+            reason: reason || null,
+          });
+        } catch (e) {}
+      }
+
+
       await AdminActivityLog.create({
         admin_id: req.admin.id,
         action: desiredStatus ? "CLIENT_BANNED" : "CLIENT_UNBANNED",
@@ -245,6 +258,10 @@ module.exports = {
     }
   },
 };
+
+
+
+
 
 
 

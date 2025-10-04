@@ -8,6 +8,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "created_by",
         as: "creator",
       });
+      AutoMessage.hasMany(models.AutoMessageDelivery, {
+        foreignKey: "auto_message_id",
+        as: "deliveries",
+      });
     }
   }
 
@@ -22,4 +26,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return AutoMessage;
 };
-

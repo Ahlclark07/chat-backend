@@ -1,86 +1,137 @@
-Error
-    at Query.run (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\mysql\query.js:52:25)      
-    at C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:315:28
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async MySQLQueryInterface.select (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\query-interface.js:407:12)
-    at async Client.findAll (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\model.js:1140:21)        
-    at async Promise.all (index 1)
-    at async Client.findAndCountAll (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\model.js:1322:27)
-    at async listClients (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\controllers\adminClient.controller.js:78:23) {     
-  name: 'SequelizeDatabaseError',
-  parent: Error: Champ 'Clients.id' inconnu dans where clause
-      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)       
-      at Query.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)       
-      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
-      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
-      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
-      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)  
-      at Socket.emit (node:events:518:28)
-      at addChunk (node:internal/streams/readable:561:12)
-      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
-      at Readable.push (node:internal/streams/readable:392:5) {
-    code: 'ER_BAD_FIELD_ERROR',
-    errno: 1054,
-    sqlState: '42S22',
-    sqlMessage: "Champ 'Clients.id' inconnu dans where clause",
-    sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
-      '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
-      '      FROM CreditTransactions AS ct\n' +
-      '      WHERE ct.client_id = Clients.id\n' +
-      '    ) AS `credits_spent`, (\n' +
-      '      SELECT COUNT(*)\n' +
-      '      FROM Conversations AS conv\n' +
-      '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
-      '    ) AS `active_conversations`, (\n' +
-      '      SELECT COUNT(*)\n' +
-      '      FROM Conversations AS conv_all\n' +
-      '      WHERE conv_all.client_id = Clients.id\n' +
-      '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
-    parameters: undefined
-  },
-  original: Error: Champ 'Clients.id' inconnu dans where clause
-      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)       
-      at Query.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)       
-      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
-      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
-      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
-      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)  
-      at Socket.emit (node:events:518:28)
-      at addChunk (node:internal/streams/readable:561:12)
-      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
-      at Readable.push (node:internal/streams/readable:392:5) {
-    code: 'ER_BAD_FIELD_ERROR',
-    errno: 1054,
-    sqlState: '42S22',
-    sqlMessage: "Champ 'Clients.id' inconnu dans where clause",
-    sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
-      '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
-      '      FROM CreditTransactions AS ct\n' +
-      '      WHERE ct.client_id = Clients.id\n' +
-      '    ) AS `credits_spent`, (\n' +
-      '      SELECT COUNT(*)\n' +
-      '      FROM Conversations AS conv\n' +
-      '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
-      '    ) AS `active_conversations`, (\n' +
-      '      SELECT COUNT(*)\n' +
-      '      FROM Conversations AS conv_all\n' +
-      '      WHERE conv_all.client_id = Clients.id\n' +
-      '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
-    parameters: undefined
-  },
-  sql: 'SELECT `Client`.`id`, `Client`.`nom`, `Client`.`prenom`, `Client`.`email`, `Client`.`date_naissance`, `Client`.`photo_profil`, `Client`.`pays_id`, `Client`.`ville_id`, `Client`.`telephone`, `Client`.`credit_balance`, `Client`.`is_banned`, `Client`.`ban_reason`, `Client`.`ban_expires_at`, `Client`.`last_login`, `Client`.`description`, `Client`.`sexe`, `Client`.`attirance`, `Client`.`createdAt`, `Client`.`updatedAt`, (\n' +
-    '      SELECT COALESCE(SUM(CASE WHEN ct.amount < 0 THEN -ct.amount ELSE 0 END), 0)\n' +
-    '      FROM CreditTransactions AS ct\n' +
-    '      WHERE ct.client_id = Clients.id\n' +
-    '    ) AS `credits_spent`, (\n' +
-    '      SELECT COUNT(*)\n' +
-    '      FROM Conversations AS conv\n' +
-    '      WHERE conv.client_id = Clients.id AND conv.closed_at IS NULL\n' +
-    '    ) AS `active_conversations`, (\n' +
-    '      SELECT COUNT(*)\n' +
-    '      FROM Conversations AS conv_all\n' +
-    '      WHERE conv_all.client_id = Clients.id\n' +
-    '    ) AS `total_conversations`, `pays`.`id` AS `pays.id`, `pays`.`name` AS `pays.name`, `ville`.`id` AS `ville.id`, `ville`.`name` AS `ville.name` FROM `Clients` AS `Client` LEFT OUTER JOIN `Countries` AS `pays` ON `Client`.`pays_id` = `pays`.`id` LEFT OUTER JOIN `Cities` AS `ville` ON `Client`.`ville_id` = `ville`.`id` ORDER BY `Client`.`createdAt` DESC LIMIT 0, 10;',
-  parameters: {}
+[Object: null prototype] {
+  photo_profil: [
+    {
+      fieldname: 'photo_profil',
+      originalname: "Capture d'Ã©cran 2025-10-04 003437.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920575_photo_profil.png',
+      path: 'uploads\\girls\\girls_1759592920575_photo_profil.png',
+      size: 15016
+    }
+  ],
+  photos: [
+    {
+      fieldname: 'photos',
+      originalname: "Capture d'Ã©cran 2025-07-23 002326.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920575_photos.png',
+      path: 'uploads\\girls\\girls_1759592920575_photos.png',
+      size: 13612
+    },
+    {
+      fieldname: 'photos',
+      originalname: "Capture d'Ã©cran 2025-07-23 020242.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920575_photos.png',
+      path: 'uploads\\girls\\girls_1759592920575_photos.png',
+      size: 283343
+    },
+    {
+      fieldname: 'photos',
+      originalname: "Capture d'Ã©cran 2025-07-23 143914.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920579_photos.png',
+      path: 'uploads\\girls\\girls_1759592920579_photos.png',
+      size: 274370
+    },
+    {
+      fieldname: 'photos',
+      originalname: "Capture d'Ã©cran 2025-07-23 145301.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920581_photos.png',
+      path: 'uploads\\girls\\girls_1759592920581_photos.png',
+      size: 315126
+    },
+    {
+      fieldname: 'photos',
+      originalname: "Capture d'Ã©cran 2025-07-23 145623.png",
+      encoding: '7bit',
+      mimetype: 'image/png',
+      destination: 'uploads/girls/',
+      filename: 'girls_1759592920584_photos.png',
+      path: 'uploads\\girls\\girls_1759592920584_photos.png',
+      size: 369081
+    }
+  ]
 }
-GET /api/admin/clients?page=1&limit=10 500 11.845 ms - 52
+POST /api/admin/girls 201 31.846 ms - 390
+GET /api/locations/countries 304 5.970 ms - -
+GET /api/admin/girls-summary 200 10.642 ms - 6509
+GET /api/admin-management/list/all 304 3.077 ms - -
+GET /uploads/girls/girls_1759312409765_photo_profil.jpg 304 0.865 ms - -
+GET /uploads/girls/girls_1755458597734_photo_profil.png 304 0.885 ms - -
+GET /api/admin/clients?page=1&limit=10 304 6.294 ms - -
+GET /api/locations/countries 304 6.031 ms - -
+GET /api/admin/girls-summary 304 8.913 ms - -
+GET /api/locations/countries 304 1.536 ms - -
+GET /api/admin-management/list/all 304 2.995 ms - -
+GET /uploads/girls/girls_1759592920575_photo_profil.png 200 1.411 ms - 15016       
+GET /api/admin/girls/7 200 2.673 ms - 800
+GET /uploads/girls/girls_1759592920575_photos.png 200 0.667 ms - 283343
+GET /uploads/girls/girls_1759592920579_photos.png 200 0.868 ms - 274370
+GET /uploads/girls/girls_1759592920581_photos.png 200 2.134 ms - 315126
+GET /api/locations/cities/by-country/6 304 3.076 ms - -
+GET /uploads/girls/girls_1759592920584_photos.png 200 1.311 ms - 369081
+GET /api/admin/girls/7 304 2.838 ms - -
+GET /api/locations/cities/by-country/6 304 1.263 ms - -
+Error
+    at Query.run (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\mysql\query.js:52:25)
+    at C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\sequelize.js:315:28
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) 
+    at async MySQLQueryInterface.update (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\dialects\abstract\query-interface.js:355:12)      
+    at async Girl.save (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\sequelize\lib\model.js:2490:35)
+    at async updateGirl (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\src\controllers\adminGirl.controller.js:207:7) {
+  name: 'SequelizeForeignKeyConstraintError',
+  parent: Error: Cannot add or update a child row: a foreign key constraint fails (`db_chat_dev`.`girls`, CONSTRAINT `Girls_admin_id_foreign_idx` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL ON UPDATE CASCADE)
+      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)
+      at Execute.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)
+      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
+      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
+      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
+      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)       
+      at Readable.push (node:internal/streams/readable:392:5) {
+    code: 'ER_NO_REFERENCED_ROW_2',
+    errno: 1452,
+    sqlState: '23000',
+    sqlMessage: 'Cannot add or update a child row: a foreign key constraint fails (`db_chat_dev`.`girls`, CONSTRAINT `Girls_admin_id_foreign_idx` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL ON UPDATE CASCADE)',
+    sql: 'UPDATE `Girls` SET `pays_id`=?,`ville_id`=?,`admin_id`=?,`updatedAt`=? WHERE `id` = ?',
+    parameters: [ '6', '68', '', '2025-10-04 15:49:17', 7 ]
+  },
+  original: Error: Cannot add or update a child row: a foreign key constraint fails (`db_chat_dev`.`girls`, CONSTRAINT `Girls_admin_id_foreign_idx` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL ON UPDATE CASCADE)
+      at Packet.asError (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packets\packet.js:740:17)
+      at Execute.execute (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\commands\command.js:29:26)
+      at Connection.handlePacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:475:34)
+      at PacketParser.onPacket (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:93:12)
+      at PacketParser.executeStart (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\packet_parser.js:75:16)
+      at Socket.<anonymous> (C:\Users\HP GAMER\Desktop\c-workspace\c-backend\node_modules\mysql2\lib\base\connection.js:100:25)
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)       
+      at Readable.push (node:internal/streams/readable:392:5) {
+    code: 'ER_NO_REFERENCED_ROW_2',
+    errno: 1452,
+    sqlState: '23000',
+    sqlMessage: 'Cannot add or update a child row: a foreign key constraint fails (`db_chat_dev`.`girls`, CONSTRAINT `Girls_admin_id_foreign_idx` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL ON UPDATE CASCADE)',
+    sql: 'UPDATE `Girls` SET `pays_id`=?,`ville_id`=?,`admin_id`=?,`updatedAt`=? WHERE `id` = ?',
+    parameters: [ '6', '68', '', '2025-10-04 15:49:17', 7 ]
+  },
+  sql: 'UPDATE `Girls` SET `pays_id`=?,`ville_id`=?,`admin_id`=?,`updatedAt`=? WHERE `id` = ?',
+  parameters: [ '6', '68', '', '2025-10-04 15:49:17', 7 ],
+  table: 'admins',
+  fields: [ 'admin_id' ],
+  value: undefined,
+  index: 'Girls_admin_id_foreign_idx',
+  reltype: 'child'

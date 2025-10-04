@@ -1,26 +1,43 @@
-const { AutoMessage, Girl, Conversation, Message, Setting } = require("../../models");
+const { AutoMessage, Girl, Conversation, Message, Setting, AutoMessageDelivery } = require("../../models");
 const { clientIdToSocketId } = require("../sockets");
+const { Op } = require("sequelize");
 
-async function pickRandomActiveAutoMessage() {
-  const all = await AutoMessage.findAll({ where: { active: true }, raw: true });
-  if (!all.length) return null;
-  return all[Math.floor(Math.random() * all.length)];
+async function pickAutoMessageForClient(clientId) {
+  const delivered = await AutoMessageDelivery.findAll({
+    where: { client_id: clientId },
+    attributes: ["auto_message_id"],
+    raw: true,
+  });
+  const deliveredIds = delivered.map((row) => row.auto_message_id);
+
+  const where = deliveredIds.length
+    ? { active: true, id: { [Op.notIn]: deliveredIds } }
+    : { active: true };
+
+  const count = await AutoMessage.count({ where });
+  if (!count) return null;
+
+  const offset = Math.floor(Math.random() * count);
+  return AutoMessage.findOne({ where, offset, order: [["id", "ASC"]], raw: true });
 }
 
 async function pickGirlExcluding(girlIds = []) {
-  const where = girlIds.length ? { id: { [require("sequelize").Op.notIn]: girlIds } } : {};
+  const where = girlIds.length ? { id: { [Op.notIn]: girlIds } } : {};
   const count = await Girl.count({ where });
   if (!count) return null;
   const offset = Math.floor(Math.random() * count);
-  const g = await Girl.findOne({ where, offset, order: [["id", "ASC"]], raw: true });
-  return g;
+  return Girl.findOne({ where, offset, order: [["id", "ASC"]], raw: true });
 }
 
 async function processClient(io, clientId, maxConvs) {
-  const convs = await Conversation.findAll({ where: { client_id: clientId }, attributes: ["id", "girl_id"], raw: true });
+  const convs = await Conversation.findAll({
+    where: { client_id: clientId },
+    attributes: ["id", "girl_id"],
+    raw: true,
+  });
   if (convs.length >= maxConvs) return; // stop if already threshold
 
-  const autoMsg = await pickRandomActiveAutoMessage();
+  const autoMsg = await pickAutoMessageForClient(clientId);
   if (!autoMsg) return;
 
   const existingGirlIds = convs.map((c) => c.girl_id);
@@ -43,6 +60,13 @@ async function processClient(io, clientId, maxConvs) {
   });
 
   await Conversation.update({ updatedAt: new Date() }, { where: { id: conv.id } });
+
+  await AutoMessageDelivery.create({
+    auto_message_id: autoMsg.id,
+    client_id: clientId,
+    conversation_id: conv.id,
+    message_id: message.id,
+  }).catch(() => {});
 
   const socketId = clientIdToSocketId.get(clientId);
   if (socketId) {
@@ -90,7 +114,8 @@ function startAutoMessagesJob(io) {
     }
   }
   tick();
-  console.log("⏱️ AutoMessages job activé (configurable)");
+  console.log("AutoMessages job started (configurable)");
 }
 
 module.exports = { startAutoMessagesJob };
+
