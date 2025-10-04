@@ -1,4 +1,4 @@
-const { Admin } = require("../../models");
+const { Admin, SuspensionReason } = require("../../models");
 const bcrypt = require("bcrypt");
 
 module.exports = {
@@ -200,6 +200,20 @@ module.exports = {
 
       await target.update({ is_active: newStatus });
 
+      // Log suspension reason when deactivating admin
+      const suspensionReason = typeof req.body.reason === 'string' ? req.body.reason : null;
+      if (newStatus === false) {
+        try {
+          await SuspensionReason.create({
+            user_type: 'Admin',
+            user_id: target.id,
+            suspended_by_id: req.admin.id,
+            reason: suspensionReason,
+          });
+        } catch (e) {}
+      }
+
+
       res.json({
         message: newStatus
           ? "Compte réactivé avec succès."
@@ -248,3 +262,7 @@ module.exports = {
     }
   },
 };
+
+
+
+

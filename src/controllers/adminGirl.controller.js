@@ -1,3 +1,17 @@
+const parseOptionalInt = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "number") {
+    return Number.isNaN(value) ? null : value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = parseInt(trimmed, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
 const {
   Girl,
   AdminGirl,
@@ -16,6 +30,59 @@ const normalizeOptionalString = (value) => {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const parseIdList = (input) => {
+  if (input === undefined || input === null) return [];
+  let raw = input;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      raw = JSON.parse(trimmed);
+    } catch (_) {
+      raw = trimmed
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+  if (!Array.isArray(raw)) {
+    raw = [raw];
+  }
+  return raw
+    .map((value) => {
+      const id = parseInt(value, 10);
+      return Number.isInteger(id) ? id : null;
+    })
+    .filter((id) => id !== null);
+};
+
+const parseBooleanFlag = (input) => {
+  if (typeof input === "string") {
+    const normalized = input.trim().toLowerCase();
+    if (!normalized) return false;
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+  return input === true || input === 1;
+};
+const deleteGirlFileIfExists = (filename) => {
+  if (!filename) return;
+  const filePath = path.join(
+    __dirname,
+    "..",
+    "..",
+    "uploads",
+    "girls",
+    filename
+  );
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.warn("Suppression fichier échouée:", filePath);
+  }
 };
 
 const logAdminAction = async ({ adminId, action, targetId, details }) => {
@@ -53,25 +120,31 @@ module.exports = {
 
       const normalizedPseudo = normalizeOptionalString(pseudo);
       if (normalizedPseudo) {
-        const existingPseudo = await Girl.findOne({ where: { pseudo: normalizedPseudo } });
+        const existingPseudo = await Girl.findOne({
+          where: { pseudo: normalizedPseudo },
+        });
         if (existingPseudo) {
-          return res.status(400).json({ message: "Pseudo deja utilise." });
+          return res.status(400).json({ message: "Pseudo deja utiliée." });
         }
       }
+
+      const parsedPaysId = parseOptionalInt(pays_id);
+      const parsedVilleId = parseOptionalInt(ville_id);
+      const parsedAdminId = parseOptionalInt(admin_id);
 
       const girl = await Girl.create({
         nom,
         prenom,
         date_naissance,
         description,
-        pays_id,
-        ville_id,
+        pays_id: parsedPaysId ?? null,
+        ville_id: parsedVilleId ?? null,
         sexe,
         telephone: normalizeOptionalString(telephone),
         pseudo: normalizedPseudo,
         photo_profil: req.files?.photo_profil?.[0]?.filename || null,
-        created_by: req.admin.id, // superadmin ou god créateur
-        admin_id: admin_id || null, // admin assigné
+        created_by: req.admin.id, // superadmin ou god createur
+        admin_id: parsedAdminId ?? null, // admin assigne
       });
 
       if (req.files?.photos?.length) {
@@ -105,6 +178,7 @@ module.exports = {
       if (!Number.isInteger(girlId)) {
         return res.status(400).json({ message: "Identifiant invalide" });
       }
+
       const {
         nom,
         prenom,
@@ -121,14 +195,23 @@ module.exports = {
       const girl = await Girl.findByPk(girlId);
       if (!girl) return res.status(404).json({ message: "Girl non trouvée" });
 
-      // Mise à jour des champs
+      // Mise à jour des champs basiques
       girl.nom = nom ?? girl.nom;
       girl.prenom = prenom ?? girl.prenom;
       girl.date_naissance = date_naissance ?? girl.date_naissance;
       girl.description = description ?? girl.description;
-      girl.pays_id = pays_id ?? girl.pays_id;
-      girl.ville_id = ville_id ?? girl.ville_id;
-      girl.admin_id = admin_id ?? girl.admin_id;
+      const parsedPaysId = parseOptionalInt(pays_id);
+      if (parsedPaysId !== undefined) {
+        girl.pays_id = parsedPaysId;
+      }
+      const parsedVilleId = parseOptionalInt(ville_id);
+      if (parsedVilleId !== undefined) {
+        girl.ville_id = parsedVilleId;
+      }
+      const parsedAdminId = parseOptionalInt(admin_id);
+      if (parsedAdminId !== undefined) {
+        girl.admin_id = parsedAdminId;
+      }
       if (typeof sexe !== "undefined") {
         girl.sexe = sexe;
       }
@@ -148,18 +231,73 @@ module.exports = {
         girl.telephone = normalizeOptionalString(telephone);
       }
 
-      // Photo de profil (si nouvelle image)
-      if (req.files?.photo_profil) {
-        girl.photo_profil = req.files.photo_profil[0].filename;
+      // Gestion de la photo de profil
+      const newProfileFile = req.files?.photo_profil?.[0]?.filename;
+      if (newProfileFile) {
+        const previousProfile = girl.photo_profil;
+        girl.photo_profil = newProfileFile;
+        if (previousProfile && previousProfile !== newProfileFile) {
+          deleteGirlFileIfExists(previousProfile);
+        }
       }
 
       await girl.save();
 
+      const clearGallery =
+        parseBooleanFlag(req.body.clear_gallery) ||
+        parseBooleanFlag(req.body.clearGallery);
+
+      if (clearGallery) {
+        const existingPhotos = await GirlPhoto.findAll({
+          where: { girl_id: girlId },
+        });
+        for (const photo of existingPhotos) {
+          deleteGirlFileIfExists(photo.url);
+        }
+        await GirlPhoto.destroy({ where: { girl_id: girlId } });
+      } else {
+        const idsToDelete = new Set([
+          ...parseIdList(req.body.photos_to_delete),
+          ...parseIdList(req.body.photosToDelete),
+          ...parseIdList(req.body.remove_photo_ids),
+        ]);
+
+        if (idsToDelete.size > 0) {
+          const idArray = Array.from(idsToDelete);
+          const photoRows = await GirlPhoto.findAll({
+            where: { id: idArray, girl_id: girlId },
+          });
+          for (const photo of photoRows) {
+            deleteGirlFileIfExists(photo.url);
+          }
+          await GirlPhoto.destroy({
+            where: { id: idArray, girl_id: girlId },
+          });
+        }
+      }
+
+      // Ajout de nouvelles photos de galerie
+      if (Array.isArray(req.files?.photos) && req.files.photos.length) {
+        const photoData = req.files.photos.map((file) => ({
+          girl_id: girl.id,
+          url: file.filename,
+        }));
+        await GirlPhoto.bulkCreate(photoData);
+      }
       await logAdminAction({
         adminId: req.admin.id,
         action: "UPDATE_GIRL",
         targetId: girl.id,
         details: "nom: " + girl.nom + ", prenom: " + girl.prenom,
+      });
+
+      await girl.reload({
+        include: [
+          { model: City, as: "ville", attributes: ["id", "name"] },
+          { model: Admin, as: "admin", attributes: ["id", "nom", "prenom"] },
+          { model: Admin, as: "creator", attributes: ["id", "nom", "prenom"] },
+          { model: GirlPhoto, as: "photos", attributes: ["id", "url"] },
+        ],
       });
 
       res.status(200).json(girl);
@@ -168,6 +306,35 @@ module.exports = {
       res
         .status(500)
         .json({ message: "Erreur lors de la mise à jour de la girl." });
+    }
+  },
+
+  getGirlById: async (req, res) => {
+    try {
+      const girlId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(girlId)) {
+        return res.status(400).json({ message: "Identifiant invalide" });
+      }
+
+      const girl = await Girl.findByPk(girlId, {
+        include: [
+          { model: City, as: "ville", attributes: ["id", "name"] },
+          { model: Admin, as: "admin", attributes: ["id", "nom", "prenom"] },
+          { model: Admin, as: "creator", attributes: ["id", "nom", "prenom"] },
+          { model: GirlPhoto, as: "photos", attributes: ["id", "url"] },
+        ],
+      });
+
+      if (!girl) {
+        return res.status(404).json({ message: "Girl non trouvée" });
+      }
+
+      return res.json(girl);
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la récupération de la girl." });
     }
   },
 
@@ -205,6 +372,7 @@ module.exports = {
           { model: City, as: "ville", attributes: ["name"] },
           { model: Admin, as: "admin", attributes: ["nom", "prenom"] },
           { model: Admin, as: "creator", attributes: ["nom", "prenom"] },
+          { model: GirlPhoto, as: "photos", attributes: ["id", "url"] },
         ],
       });
 

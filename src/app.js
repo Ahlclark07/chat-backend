@@ -78,6 +78,8 @@ app.use("/api/admin", require("./routes/autoMessage.route"));
 app.use("/api/admin", require("./routes/forbiddenWord.route"));
 app.use("/api/admin", require("./routes/signalement.route"));
 
+const suspensionRoutes = require("./routes/suspension.route");
+app.use("/api", suspensionRoutes);
 const locationsRoute = require("./routes/location.route");
 app.use("/api/locations", locationsRoute);
 
@@ -111,3 +113,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+

@@ -12,6 +12,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "message_id",
         as: "credit",
       });
+      Message.hasOne(models.AutoMessageDelivery, {
+        foreignKey: "message_id",
+        as: "autoDelivery",
+      });
     }
   }
 

@@ -23,6 +23,13 @@ router.post(
   authorizeRole("superadmin", "god"),
   controller.assignGirlToAdmin
 );
+// Récupérer les détails d'une girl
+router.get(
+  "/girls/:id",
+  authenticateAdminJWT,
+  authorizeRole("superadmin", "god"),
+  controller.getGirlById
+);
 // Modifier une girl (profil, info...)
 router.patch(
   "/girls/:id",

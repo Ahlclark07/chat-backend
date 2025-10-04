@@ -38,12 +38,50 @@ function renderWelcomeClient({ client }) {
     title: "Bienvenue !",
     bodyHtml: `
       <p>Bonjour ${escapeHtml(firstName) || "cher client"},</p>
-      <p>Votre compte a été créé avec succès. Nous sommes ravis de vous compter parmi nous.</p>
+      <p>Votre compte a été créé avec succés. Nous sommes ravis de vous compter parmi nous.</p>
       <p>Vous disposez d'un solde de crédits initial pour démarrer vos conversations.</p>
       <p style="margin-top:16px;">Bonne expérience !</p>
     `,
   });
-  const text = `Bonjour ${firstName || "cher client"},\n\nBienvenue ! Votre compte a été créé avec succès.\nBonne expérience !`;
+  const text = `Bonjour ${
+    firstName || "cher client"
+  },\n\nBienvenue ! Votre compte a été créé avec succés.\nBonne expérience !`;
+  return { subject, html: body, text };
+}
+
+function renderClientActivationMail({ client, activationLink, expiresAt }) {
+  const firstName = client?.prenom || client?.nom || "";
+  const subject = `Activez votre compte${
+    firstName ? ", " + escapeHtml(firstName) : ""
+  }`;
+  const safeLink = String(activationLink || "");
+  const expiryDate = expiresAt ? new Date(expiresAt) : null;
+  const expiresHtml = expiryDate
+    ? `<p style="color:#6b7280;font-size:12px;margin-top:12px">Ce lien expire le ${escapeHtml(
+        expiryDate.toLocaleString("fr-FR")
+      )}.</p>`
+    : "";
+  const body = baseLayout({
+    title: "Activez votre compte",
+    bodyHtml: `
+      <p>Bonjour ${escapeHtml(firstName) || "cher client"},</p>
+      <p>Merci de votre inscription ! Veuillez confirmer votre compte en cliquant sur le bouton ci-dessous.</p>
+      <p style="margin:20px 0;text-align:center;">
+        <a href="${escapeHtml(
+          safeLink
+        )}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Activer mon compte</a>
+      </p>
+      <p>Si le bouton ne fonctionne pas, copiez-collez ce lien dans votre navigateur :</p>
+      <p style="word-break:break-all;color:#2563eb;">${escapeHtml(safeLink)}</p>
+      ${expiresHtml}
+    `,
+  });
+  const expiresText = expiryDate
+    ? `\n\nCe lien expire le ${expiryDate.toLocaleString("fr-FR")}.`
+    : "";
+  const text = `Bonjour ${
+    firstName || "cher client"
+  },\n\nMerci de votre inscription ! Veuillez confirmer votre compte en ouvrant ce lien : ${safeLink}${expiresText}`;
   return { subject, html: body, text };
 }
 
@@ -57,8 +95,11 @@ function renderForbiddenWordAlert({
   messageBody,
   matchedWords = [],
 }) {
-  const subject = `Alerte mot filtré – Conversation #${conversationId}`;
-  const roleLabel = senderType === "girl" ? `ADMIN (${escapeHtml(senderAdminName || "inconnu")}) via GIRL` : "CLIENT";
+  const subject = `Alerte mot filtré é Conversation #${conversationId}`;
+  const roleLabel =
+    senderType === "girl"
+      ? `ADMIN (${escapeHtml(senderAdminName || "inconnu")}) via GIRL`
+      : "CLIENT";
   const words = matchedWords.map(escapeHtml).join(", ");
   const body = baseLayout({
     title: "Alerte mot filtré",
@@ -67,19 +108,29 @@ function renderForbiddenWordAlert({
       <p><strong>Expéditeur:</strong> ${roleLabel}</p>
       <p><strong>Girl:</strong> ${escapeHtml(girlName || "-")}</p>
       <p><strong>Client:</strong> ${escapeHtml(clientName || "-")}</p>
-      <p><strong>Mots déclencheurs:</strong> ${escapeHtml(words || "(non précisé)")}</p>
+      <p><strong>Mots déclencheurs:</strong> ${escapeHtml(
+        words || "(non précisé)"
+      )}</p>
       <div style="margin-top:12px; padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px;">
         <div style="color:#6b7280; font-size:12px; margin-bottom:6px;">Contenu du message</div>
-        <div style="white-space:pre-wrap;">${escapeHtml(messageBody || "")}</div>
+        <div style="white-space:pre-wrap;">${escapeHtml(
+          messageBody || ""
+        )}</div>
       </div>
     `,
   });
-  const text = `Alerte mot filtré\nConversation #${conversationId}\nExpéditeur: ${senderType === "girl" ? `ADMIN (${senderAdminName || "?"}) via GIRL` : "CLIENT"}\nGirl: ${girlName || "-"}\nClient: ${clientName || "-"}\nMots: ${matchedWords.join(", ")}\n\nMessage:\n${messageBody || ""}`;
+  const text = `Alerte mot filtré\nConversation #${conversationId}\nExpéditeur: ${
+    senderType === "girl"
+      ? `ADMIN (${senderAdminName || "?"}) via GIRL`
+      : "CLIENT"
+  }\nGirl: ${girlName || "-"}\nClient: ${
+    clientName || "-"
+  }\nMots: ${matchedWords.join(", ")}\n\nMessage:\n${messageBody || ""}`;
   return { subject, html: body, text };
 }
 
 module.exports = {
   renderWelcomeClient,
+  renderClientActivationMail,
   renderForbiddenWordAlert,
 };
-
