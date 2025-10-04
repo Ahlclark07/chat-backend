@@ -286,8 +286,17 @@ module.exports = {
         return res.status(400).json({ message: "Token invalide ou expiré." });
       }
 
+      const respondActivation = (payload) => {
+        const frontUrl = process.env.FRONT;
+        const acceptsJson = req.accepts(['html', 'json']) === 'json';
+        if (frontUrl && !acceptsJson) {
+          return res.redirect(frontUrl);
+        }
+        return res.status(200).json(payload);
+      };
+
       if (activationRecord.client.is_active) {
-        return res.status(200).json({ message: "Compte déjà activé." });
+        return respondActivation({ message: "Compte déjà activé." });
       }
 
       const now = new Date();
@@ -332,7 +341,7 @@ module.exports = {
         }
       }
 
-      return res.status(200).json({
+      return respondActivation({
         message: "Compte activé avec succés.",
         client,
       });
