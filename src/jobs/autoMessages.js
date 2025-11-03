@@ -57,6 +57,7 @@ async function processClient(io, clientId, maxConvs) {
     sender_id: girl.admin_id || null,
     receiver_id: clientId,
     body: autoMsg.content,
+    is_follow_up: false,
   });
 
   await Conversation.update({ updatedAt: new Date() }, { where: { id: conv.id } });

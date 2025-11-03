@@ -7,6 +7,12 @@ const {
 } = require("../middlewares/admin.middleware");
 
 router.get(
+  "/productivity",
+  authenticateAdminJWT,
+  controller.getAdminProductivity
+);
+
+router.get(
   "/:adminId/stats",
   authenticateAdminJWT,
 

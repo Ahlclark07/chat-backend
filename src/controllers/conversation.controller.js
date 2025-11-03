@@ -2,8 +2,34 @@ const { Conversation, Message, Client, Girl } = require("../../models");
 const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
+const {
+  incrementAdminParticipation,
+} = require("../services/conversationAssignment.service");
+const { clientIdToSocketId } = require("../sockets/index");
 
-// 1. Récupérer les conversations d'une girl
+function parseBoolean(value, fallback = false) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
+}
+
+// 1. Recuperer les conversations d'une girl
 exports.getConversationsForGirl = async (req, res) => {
   const { girl_id } = req.params;
   try {
@@ -28,7 +54,7 @@ exports.getConversationsForGirl = async (req, res) => {
   }
 };
 
-// 2. Récupérer les messages d'une conversation
+// 2. Recuperer les messages d'une conversation
 exports.getMessagesForConversation = async (req, res) => {
   const { conversation_id } = req.params;
   try {
@@ -44,10 +70,11 @@ exports.getMessagesForConversation = async (req, res) => {
       .json({ message: "Erreur lors du chargement des messages." });
   }
 };
+
+// 3. Envoyer un message en se faisant passer pour la girl
 exports.sendMessageAsGirl = async (req, res) => {
-  console.log(req.body);
   const { conversation_id } = req.params;
-  const { contenu } = req.body;
+  const { contenu, isFollowUp, is_follow_up } = req.body;
   const body = contenu;
 
   try {
@@ -57,7 +84,7 @@ exports.sendMessageAsGirl = async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ message: "Conversation introuvable." });
     }
-    // Gestion du média
+
     let mediaPath = null;
     if (req.file) {
       mediaPath = req.file.filename;
@@ -70,35 +97,35 @@ exports.sendMessageAsGirl = async (req, res) => {
       sender_id: req.admin.id,
       receiver_id: conversation.client_id,
       media_url: mediaPath,
+      is_follow_up: parseBoolean(isFollowUp ?? is_follow_up, false),
     });
 
-    // Mettre à jour la conversation: date et admin assigné
-    await Conversation.update(
-      { updatedAt: new Date(), assigned_admin_id: req.admin.id },
-      { where: { id: conversation_id } }
-    );
-    const io = req.app.get("io"); // assure-toi que tu fais `app.set('io', io)` dans server.js
-    io.to(`conversation_${conversation.id}`).emit("ping_message", {
-      girl_id: conversation.girl.id,
-      nom: conversation.girl.nom,
-      prenom: conversation.girl.prenom,
-      photo_profil: conversation.girl.photo_profil,
-      body: message.body,
-    });
+    await incrementAdminParticipation(conversation.id, req.admin.id);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`conversation_${conversation.id}`).emit("ping_message", {
+        girl_id: conversation.girl.id,
+        nom: conversation.girl.nom,
+        prenom: conversation.girl.prenom,
+        photo_profil: conversation.girl.photo_profil,
+        body: message.body,
+      });
+    }
 
     res.status(201).json(message);
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Erreur lors de l'envoi du message." });
+    res
+      .status(500)
+      .json({ message: "Erreur lors de l'envoi du message." });
   }
 };
 
-const { connectedClients, clientIdToSocketId } = require("../sockets/index"); // ← on importe ici
-
+// 4. Recuperer les clients disponibles pour une girl
 exports.getAvailableClientsForGirl = async (req, res) => {
   const { girl_id } = req.params;
   try {
-    // 1️⃣ Récupérer les clients déjà en conversation avec cette girl
     const existingConversations = await Conversation.findAll({
       where: { girl_id },
       attributes: ["client_id"],
@@ -107,17 +134,14 @@ exports.getAvailableClientsForGirl = async (req, res) => {
       (c) => c.client_id
     );
 
-    // 2️⃣ Extraire les IDs de clients connectés depuis la Map
     const onlineClientIds = Array.from(clientIdToSocketId.keys()).map((id) =>
-      parseInt(id)
+      parseInt(id, 10)
     );
 
-    // 3️⃣ Filtrer : en ligne ET pas déjà en conversation
     const availableIds = onlineClientIds.filter(
       (id) => !clientIdsInConversation.includes(id)
     );
 
-    // 4️⃣ Charger les données des 10 clients disponibles
     const clients = await Client.findAll({
       where: {
         id: { [Op.in]: availableIds },
@@ -129,14 +153,17 @@ exports.getAvailableClientsForGirl = async (req, res) => {
     console.error(err);
     res
       .status(500)
-      .json({ message: "Erreur lors du chargement des clients disponibles." });
+      .json({
+        message: "Erreur lors du chargement des clients disponibles.",
+      });
   }
 };
+
+// 5. Creer une conversation
 exports.createConversation = async (req, res) => {
   const { girl_id, client_id } = req.body;
 
   try {
-    // Vérifier si la conversation existe déjà
     const existing = await Conversation.findOne({
       where: { girl_id, client_id },
     });
@@ -145,7 +172,6 @@ exports.createConversation = async (req, res) => {
       return res.status(200).json(existing);
     }
 
-    // Créer la conversation vide
     const conversation = await Conversation.create({
       girl_id,
       client_id,
@@ -155,16 +181,17 @@ exports.createConversation = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({
-      message: "Erreur lors de la création de la conversation.",
+      message: "Erreur lors de la creation de la conversation.",
     });
   }
 };
 
+// 6. Supprimer un message
 exports.deleteMessage = async (req, res) => {
   const { id } = req.params;
 
   if (!["superadmin", "god"].includes(req.admin.role)) {
-    return res.status(403).json({ error: "Accès refusé" });
+    return res.status(403).json({ error: "Acces refuse" });
   }
 
   try {
@@ -174,7 +201,6 @@ exports.deleteMessage = async (req, res) => {
       return res.status(404).json({ error: "Message introuvable" });
     }
 
-    // Supprimer le média associé si présent
     if (message.media_url) {
       const filePath = path.join(
         __dirname,
@@ -189,13 +215,13 @@ exports.deleteMessage = async (req, res) => {
           fs.unlinkSync(filePath);
         }
       } catch (e) {
-        console.warn("Suppression média échouée:", filePath, e.message);
+        console.warn("Suppression media echouee:", filePath, e.message);
       }
     }
 
     await message.destroy();
 
-    res.json({ success: true, message: "Message supprimé avec succès." });
+    res.json({ success: true, message: "Message supprime avec succes." });
   } catch (err) {
     console.error("Erreur lors de la suppression :", err);
     res.status(500).json({ error: "Erreur serveur" });

@@ -1,4 +1,5 @@
-const { Message } = require("../../models");
+const db = require("../../models");
+const { Message, Admin, sequelize } = db;
 const { Op } = require("sequelize");
 const {
   startOfWeek,
@@ -124,6 +125,147 @@ async function getAdminStats(req, res) {
   }
 }
 
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function resolveDateRange(query) {
+  const now = new Date();
+  let start = startOfMonth(now);
+  let end = endOfMonth(now);
+
+  const startCandidate = parseDateValue(query.startDate);
+  if (startCandidate) {
+    start = new Date(startCandidate);
+  }
+
+  const endCandidate = parseDateValue(query.endDate || query.finishDate);
+  if (endCandidate) {
+    end = new Date(endCandidate);
+  }
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  if (start > end) {
+    throw new Error("INVALID_RANGE");
+  }
+
+  return { start, end };
+}
+
+async function getAdminProductivity(req, res) {
+  try {
+    const { start, end } = resolveDateRange(req.query || {});
+    const adminId = req.query?.adminId
+      ? parseInt(req.query.adminId, 10)
+      : null;
+
+    const whereClause = {
+      sender_type: "girl",
+      is_follow_up: false,
+      sender_id: { [Op.not]: null },
+      createdAt: { [Op.between]: [start, end] },
+    };
+
+    if (adminId) {
+      if (Number.isNaN(adminId)) {
+        return res.status(400).json({ message: "adminId invalide." });
+      }
+      whereClause.sender_id = adminId;
+    }
+
+    const aggregates = await Message.findAll({
+      attributes: [
+        "sender_id",
+        [
+          sequelize.fn("COUNT", sequelize.col("Message.id")),
+          "messageCount",
+        ],
+        [
+          sequelize.fn(
+            "COUNT",
+            sequelize.fn(
+              "DISTINCT",
+              sequelize.col("Message.conversation_id")
+            )
+          ),
+          "conversationCount",
+        ],
+      ],
+      where: whereClause,
+      group: ["sender_id"],
+      raw: true,
+    });
+
+    if (!aggregates.length) {
+      return res.json({
+        range: {
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+        stats: [],
+      });
+    }
+
+    const adminIds = aggregates
+      .map((row) => row.sender_id)
+      .filter((id) => Number.isInteger(id));
+
+    const admins = await Admin.findAll({
+      where: { id: { [Op.in]: adminIds } },
+      attributes: ["id", "identifiant", "prenom", "nom", "email"],
+      raw: true,
+    });
+
+    const adminMap = new Map(admins.map((admin) => [admin.id, admin]));
+
+    const stats = aggregates
+      .map((row) => {
+        const admin = adminMap.get(row.sender_id) || {};
+        return {
+          adminId: row.sender_id,
+          identifiant: admin.identifiant || null,
+          prenom: admin.prenom || null,
+          nom: admin.nom || null,
+          email: admin.email || null,
+          conversationCount: Number(row.conversationCount) || 0,
+          messageCount: Number(row.messageCount) || 0,
+        };
+      })
+      .sort((a, b) => b.messageCount - a.messageCount);
+
+    return res.json({
+      range: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      stats,
+    });
+  } catch (e) {
+    if (e && e.message === "INVALID_RANGE") {
+      return res
+        .status(400)
+        .json({
+          message: "La date de debut doit etre anterieure a la date de fin.",
+        });
+    }
+
+    console.error("Erreur stats productivite admin:", e);
+    return res
+      .status(500)
+      .json({ message: "Erreur lors de la recuperation des statistiques." });
+  }
+}
+
 module.exports = {
   getAdminStats,
+  getAdminProductivity,
 };

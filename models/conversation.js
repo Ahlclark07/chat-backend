@@ -23,6 +23,12 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "conversation_id",
         as: "messages",
       });
+      if (models.ConversationAdminStat) {
+        Conversation.hasMany(models.ConversationAdminStat, {
+          foreignKey: "conversation_id",
+          as: "adminStats",
+        });
+      }
       Conversation.hasMany(models.CreditTransaction, {
         foreignKey: "conversation_id",
         as: "transactions",

@@ -27,6 +27,11 @@ module.exports = (sequelize, DataTypes) => {
       media_url: DataTypes.STRING,
       sender_id: DataTypes.INTEGER,
       receiver_id: DataTypes.INTEGER,
+      is_follow_up: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
     },
     {
       sequelize,

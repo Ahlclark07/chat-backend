@@ -5,6 +5,7 @@ const {
   Country,
   GirlPhoto,
   Favorite,
+  HomepageGirl,
 } = require("../../models");
 const { Op } = require("sequelize");
 module.exports = {
@@ -13,6 +14,50 @@ module.exports = {
       const page = parseInt(req.query.page, 10) || 1;
       const limit = 20;
       const offset = (page - 1) * limit;
+
+      const homepageSelection = await HomepageGirl.findAll({
+        order: [
+          ["position", "ASC"],
+          ["createdAt", "ASC"],
+        ],
+      });
+
+      if (homepageSelection.length > 0) {
+        const total = homepageSelection.length;
+        const selectedSlice = homepageSelection.slice(offset, offset + limit);
+        const selectedIds = selectedSlice.map((row) => row.girl_id);
+
+        const totalPages = Math.ceil(total / limit);
+
+        if (selectedIds.length === 0) {
+          return res.json({
+            data: [],
+            total,
+            page,
+            totalPages,
+          });
+        }
+
+        const girls = await Girl.findAll({
+          where: { id: selectedIds },
+          include: [
+            { model: City, as: "ville", attributes: ["id", "name"] },
+            { model: Country, as: "pays", attributes: ["id", "name"] },
+          ],
+        });
+
+        const girlsById = new Map(girls.map((g) => [g.id, g]));
+        const orderedGirls = selectedIds
+          .map((id) => girlsById.get(id))
+          .filter(Boolean);
+
+        return res.json({
+          data: orderedGirls,
+          total,
+          page,
+          totalPages,
+        });
+      }
 
       const girls = await Girl.findAndCountAll({
         limit,
@@ -126,14 +171,50 @@ module.exports = {
     }
   },
   getFilteredGirls: async (req, res) => {
-    const { age, pays_id, ville_id, sexe } = req.query;
+    const { age_min, age_max, pays_id, ville_id, sexe } = req.query;
 
     const where = {};
 
-    if (age) {
-      const birthDateLimit = new Date();
-      birthDateLimit.setFullYear(birthDateLimit.getFullYear() - age);
-      where.date_naissance = { [Op.lte]: birthDateLimit };
+    if (typeof age_min !== "undefined" || typeof age_max !== "undefined") {
+      const min = age_min !== undefined ? parseInt(age_min, 10) : undefined;
+      const max = age_max !== undefined ? parseInt(age_max, 10) : undefined;
+
+      if (
+        (min !== undefined && (!Number.isFinite(min) || min < 0)) ||
+        (max !== undefined && (!Number.isFinite(max) || max < 0))
+      ) {
+        return res
+          .status(400)
+          .json({ message: "age_min et age_max doivent être positifs." });
+      }
+
+      if (min !== undefined && max !== undefined && min > max) {
+        return res
+          .status(400)
+          .json({ message: "age_min ne peut pas être supérieur à age_max." });
+      }
+
+      const now = new Date();
+      let earliestDob = null;
+      let latestDob = null;
+
+      if (max !== undefined) {
+        earliestDob = new Date(now);
+        earliestDob.setFullYear(earliestDob.getFullYear() - max);
+      }
+
+      if (min !== undefined) {
+        latestDob = new Date(now);
+        latestDob.setFullYear(latestDob.getFullYear() - min);
+      }
+
+      if (earliestDob && latestDob) {
+        where.date_naissance = { [Op.between]: [earliestDob, latestDob] };
+      } else if (earliestDob) {
+        where.date_naissance = { [Op.gte]: earliestDob };
+      } else if (latestDob) {
+        where.date_naissance = { [Op.lte]: latestDob };
+      }
     }
 
     if (pays_id && pays_id !== "neant") where.pays_id = pays_id;
