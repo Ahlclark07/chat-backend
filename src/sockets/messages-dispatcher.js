@@ -3,14 +3,29 @@ const {
   getConversationWithClientAndGirl,
   getUnprocessedClientConversations,
 } = require("../services/conversation.service");
+const {
+  getAdminPriorityList,
+  setConversationAssignedAdmin,
+} = require("../services/conversationAssignment.service");
 
 const connectedAdmins = new Map(); // socketId -> adminId
-const adminSockets = new Map(); // adminId -> socketId
+const adminSockets = new Map(); // adminId -> Set<socketId>
 const assignedConversations = new Map(); // conversationId -> { adminId, timeout, assignedAt, expiresAt }
 const pendingMessages = new Map(); // conversationId -> payload
 
 const MAX_CONVERSATIONS_PER_ADMIN = 3;
-const ASSIGNMENT_TIMEOUT_MS = 5 * 60 * 1000;
+const ASSIGNMENT_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_TIMEOUT_HISTORY = 5;
+const ASSIGNMENT_ATTEMPT_LIMIT = 10;
+const MAX_SOCKET_CONNECTIONS_PER_ADMIN = Math.max(
+  1,
+  parseInt(
+    process.env.MAX_ADMIN_SOCKET_CONNECTIONS ||
+      process.env.MAX_CONCURRENT_ADMIN_SESSIONS ||
+      "2",
+    10
+  ) || 2
+);
 
 let hasBootstrappedPending = false;
 
@@ -22,11 +37,25 @@ function initMessageDispatcher(io) {
         return;
       }
 
-      removeExistingAdminConnection(io, normalizedId, socket.id);
+      const allowed = ensureAdminConnection(normalizedId, socket);
+      if (!allowed) {
+        return;
+      }
 
       connectedAdmins.set(socket.id, normalizedId);
-      adminSockets.set(normalizedId, socket.id);
-      console.log("[dispatcher] admin", normalizedId, "connecté.");
+      let socketSet = adminSockets.get(normalizedId);
+      if (!socketSet) {
+        socketSet = new Set();
+        adminSockets.set(normalizedId, socketSet);
+      }
+      socketSet.add(socket.id);
+      console.log(
+        "[dispatcher] admin",
+        normalizedId,
+        "connecte (total sockets:",
+        socketSet.size,
+        ")."
+      );
 
       if (!hasBootstrappedPending) {
         await bootstrapPendingConversations();
@@ -48,7 +77,7 @@ function initMessageDispatcher(io) {
       clearTimeout(assignment.timeout);
       assignedConversations.delete(conversationId);
       pendingMessages.delete(conversationId);
-      console.log("[dispatcher] conversation", conversationId, "traitée par l'admin.");
+      console.log("[dispatcher] conversation", conversationId, "traitee par l'admin.");
 
       await assignPendingConversations(io);
     });
@@ -59,12 +88,25 @@ function initMessageDispatcher(io) {
         return;
       }
       connectedAdmins.delete(socket.id);
-      if (adminSockets.get(adminId) === socket.id) {
-        adminSockets.delete(adminId);
+      const sockets = adminSockets.get(adminId);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          adminSockets.delete(adminId);
+          console.log("[dispatcher] admin", adminId, "deconnecte (plus de socket actif).");
+          await releaseAssignmentsForAdmin(io, adminId);
+        } else {
+          console.log(
+            "[dispatcher] admin",
+            adminId,
+            "deconnecte (sockets restantes:",
+            sockets.size,
+            ")."
+          );
+        }
+      } else {
+        console.log("[dispatcher] admin", adminId, "deconnecte (aucune socket enregistree).");
       }
-      console.log("[dispatcher] admin", adminId, "déconnecté.");
-
-      await releaseAssignmentsForAdmin(io, adminId);
     });
   });
 }
@@ -75,41 +117,123 @@ async function handleClientMessage(io, { conversationId }) {
     return;
   }
 
+  ensurePayloadArrays(payload);
+
+  const excluded = new Set([
+    ...payload.attemptedAdminIds,
+    ...payload.recentlyTimedOutAdmins,
+  ]);
+
   const existingAssignment = assignedConversations.get(conversationId);
   if (existingAssignment) {
-    const socketId = adminSockets.get(existingAssignment.adminId);
-    if (socketId) {
-      payload.assignedAdminId = existingAssignment.adminId;
-      payload.isUpdate = true;
-      pendingMessages.set(conversationId, payload);
-      io.to(socketId).emit("new_message_for_admin", payload);
-    } else {
+    payload.assignedAdminId = existingAssignment.adminId;
+    payload.isUpdate = true;
+    payload.updatedAt = Date.now();
+    pendingMessages.set(conversationId, payload);
+
+    const delivered = emitToAdminSockets(
+      io,
+      existingAssignment.adminId,
+      "new_message_for_admin",
+      payload
+    );
+    if (delivered) {
+      return;
+    }
+    {
       clearTimeout(existingAssignment.timeout);
       assignedConversations.delete(conversationId);
+      try {
+        await setConversationAssignedAdmin(conversationId, null);
+      } catch (err) {
+        console.error(
+          "[dispatcher] impossible de nettoyer l'assignation perdue:",
+          err
+        );
+      }
       await handleClientMessage(io, { conversationId });
     }
     return;
   }
 
-  const preferredAdminId = payload.assignedAdminId;
-  if (preferredAdminId && canAdminTakeMore(preferredAdminId)) {
-    const assigned = assignToAdmin(io, preferredAdminId, conversationId, payload, false);
+  const preferredAdminId = payload.assignedAdminId
+    ? parseInt(payload.assignedAdminId, 10)
+    : null;
+  if (
+    preferredAdminId &&
+    !excluded.has(preferredAdminId) &&
+    canAdminTakeMore(preferredAdminId)
+  ) {
+    const assigned = assignToAdmin(io, preferredAdminId, conversationId, payload, {
+      isUpdate: false,
+    });
     if (assigned) {
       return;
     }
+    excluded.add(preferredAdminId);
   }
 
-  const availableAdmins = getAvailableAdmins();
-  if (availableAdmins.length === 0) {
-    console.log("[dispatcher] aucun admin disponible, attribution différée (conv", conversationId, ")");
+  const ranked = await getAdminPriorityList(conversationId);
+  const rankedAvailable = ranked.filter(
+    (entry) =>
+      !excluded.has(entry.adminId) && canAdminTakeMore(entry.adminId)
+  );
+
+  if (rankedAvailable.length > 0) {
+    const topScore = rankedAvailable[0].messageCount;
+    const topGroup = rankedAvailable.filter(
+      (entry) => entry.messageCount === topScore
+    );
+    const chosenEntry = chooseRandom(topGroup);
+    if (chosenEntry) {
+      const assigned = assignToAdmin(
+        io,
+        chosenEntry.adminId,
+        conversationId,
+        payload,
+        { isUpdate: false }
+      );
+      if (assigned) {
+        return;
+      }
+      excluded.add(chosenEntry.adminId);
+    }
+  }
+
+  let fallbackAdmins = getAvailableAdmins(excluded);
+  if (fallbackAdmins.length === 0) {
+    const allAdmins = getAvailableAdmins();
+    if (allAdmins.length > 0) {
+      console.log(
+        "[dispatcher] aucune alternative disponible, tentative avec admin deja sollicite (conv",
+        conversationId,
+        ")"
+      );
+      fallbackAdmins = allAdmins;
+    }
+  }
+
+  if (fallbackAdmins.length === 0) {
+    console.log(
+      "[dispatcher] aucun admin disponible, attribution differée (conv",
+      conversationId,
+      ")"
+    );
     return;
   }
 
-  const chosenAdmin = chooseAdminWithLeastLoad(availableAdmins);
-  assignToAdmin(io, chosenAdmin, conversationId, payload, false);
+  const chosenFallback = chooseFallbackAdmin(fallbackAdmins);
+  assignToAdmin(io, chosenFallback, conversationId, payload, {
+    isUpdate: false,
+  });
 }
 
-module.exports = { initMessageDispatcher, handleClientMessage };
+module.exports = {
+  initMessageDispatcher,
+  handleClientMessage,
+  queueConversationForFollowUp,
+  getAdminActiveSocketCount,
+};
 
 async function bootstrapPendingConversations() {
   const unprocessed = await getUnprocessedClientConversations();
@@ -143,22 +267,70 @@ async function releaseAssignmentsForAdmin(io, adminId) {
     }
     const payload = pendingMessages.get(conversationId);
     if (payload) {
+      ensurePayloadArrays(payload);
       payload.assignedAdminId = null;
+      payload.recentlyTimedOutAdmins = pushUniqueLimited(
+        payload.recentlyTimedOutAdmins,
+        adminId,
+        MAX_TIMEOUT_HISTORY
+      );
       pendingMessages.set(conversationId, payload);
+    }
+    try {
+      await setConversationAssignedAdmin(conversationId, null);
+    } catch (err) {
+      console.error(
+        "[dispatcher] impossible de liberer la conversation",
+        conversationId,
+        err
+      );
     }
     await handleClientMessage(io, { conversationId });
   }
 }
 
-function removeExistingAdminConnection(io, adminId, currentSocketId) {
-  const existingSocketId = adminSockets.get(adminId);
-  if (existingSocketId && existingSocketId !== currentSocketId) {
-    const existingSocket = io.sockets.sockets.get(existingSocketId);
-    if (existingSocket) {
-      existingSocket.emit("force_logout", { reason: "duplicate_session" });
-      existingSocket.disconnect(true);
-    }
+function ensureAdminConnection(adminId, socket) {
+  const sockets = adminSockets.get(adminId);
+  if (!sockets) {
+    return true;
   }
+  if (sockets.has(socket.id)) {
+    return true;
+  }
+  if (sockets.size >= MAX_SOCKET_CONNECTIONS_PER_ADMIN) {
+    console.log(
+      "[dispatcher] connexion refusee (limite sockets) pour l'admin",
+      adminId
+    );
+    socket.emit("force_logout", { reason: "max_socket_limit" });
+    socket.disconnect(true);
+    return false;
+  }
+  return true;
+}
+
+function getAdminSocketIds(adminId) {
+  const sockets = adminSockets.get(adminId);
+  if (!sockets || sockets.size === 0) {
+    return [];
+  }
+  return Array.from(sockets.values());
+}
+
+function emitToAdminSockets(io, adminId, event, payload) {
+  const socketIds = getAdminSocketIds(adminId);
+  if (!socketIds.length) {
+    return false;
+  }
+  socketIds.forEach((socketId) => {
+    io.to(socketId).emit(event, payload);
+  });
+  return true;
+}
+
+function getAdminActiveSocketCount(adminId) {
+  const sockets = adminSockets.get(adminId);
+  return sockets ? sockets.size : 0;
 }
 
 async function hydratePendingPayload(conversationId, baseConversation) {
@@ -178,6 +350,8 @@ async function hydratePendingPayload(conversationId, baseConversation) {
       girl: conversation.girl,
       createdAt: Date.now(),
       assignedAdminId: conversation.assigned_admin_id || null,
+      attemptedAdminIds: [],
+      recentlyTimedOutAdmins: [],
     };
   }
 
@@ -188,7 +362,8 @@ async function hydratePendingPayload(conversationId, baseConversation) {
     !Array.isArray(payload.girl?.photos);
 
   if (needsConversationDetails) {
-    conversation = conversation || (await getConversationWithClientAndGirl(conversationId));
+    conversation =
+      conversation || (await getConversationWithClientAndGirl(conversationId));
     if (!conversation) {
       return null;
     }
@@ -198,7 +373,10 @@ async function hydratePendingPayload(conversationId, baseConversation) {
     payload.client = conversation.client;
   }
 
-  if ((!payload.girl || !Array.isArray(payload.girl?.photos)) && conversation?.girl) {
+  if (
+    (!payload.girl || !Array.isArray(payload.girl?.photos)) &&
+    conversation?.girl
+  ) {
     payload.girl = conversation.girl;
   }
 
@@ -213,12 +391,19 @@ async function hydratePendingPayload(conversationId, baseConversation) {
   return payload;
 }
 
-function getAvailableAdmins() {
-  return Array.from(adminSockets.keys()).filter((adminId) => canAdminTakeMore(adminId));
+function getAvailableAdmins(excluded = new Set()) {
+  const available = [];
+  adminSockets.forEach((socketSet, adminId) => {
+    if (socketSet && socketSet.size > 0 && !excluded.has(adminId) && canAdminTakeMore(adminId)) {
+      available.push(adminId);
+    }
+  });
+  return available;
 }
 
 function canAdminTakeMore(adminId) {
-  if (!adminSockets.has(adminId)) {
+  const sockets = adminSockets.get(adminId);
+  if (!sockets || sockets.size === 0) {
     return false;
   }
   return getActiveAssignmentCount(adminId) < MAX_CONVERSATIONS_PER_ADMIN;
@@ -234,29 +419,109 @@ function getActiveAssignmentCount(adminId) {
   return count;
 }
 
-function chooseAdminWithLeastLoad(adminIds) {
+function chooseFallbackAdmin(adminIds) {
   let selected = adminIds[0];
   let minCount = getActiveAssignmentCount(selected);
+  const candidates = [selected];
 
-  for (const adminId of adminIds) {
+  for (let i = 1; i < adminIds.length; i += 1) {
+    const adminId = adminIds[i];
     const count = getActiveAssignmentCount(adminId);
     if (count < minCount) {
       minCount = count;
       selected = adminId;
+      candidates.length = 0;
+      candidates.push(adminId);
+    } else if (count === minCount) {
+      candidates.push(adminId);
     }
   }
-  return selected;
+
+  if (candidates.length === 0) {
+    return selected;
+  }
+
+  return chooseRandom(candidates);
 }
 
-function assignToAdmin(io, adminId, conversationId, payload, isUpdate) {
-  const socketId = adminSockets.get(adminId);
-  if (!socketId) {
+function chooseRandom(items) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+  const idx = Math.floor(Math.random() * items.length);
+  return items[idx];
+}
+
+function ensurePayloadArrays(payload) {
+  if (!Array.isArray(payload.attemptedAdminIds)) {
+    payload.attemptedAdminIds = [];
+  }
+  if (!Array.isArray(payload.recentlyTimedOutAdmins)) {
+    payload.recentlyTimedOutAdmins = [];
+  }
+}
+
+function pushUniqueLimited(list, value, limit) {
+  const result = Array.isArray(list) ? [...list] : [];
+  if (!result.includes(value)) {
+    result.push(value);
+  }
+  while (result.length > limit) {
+    result.shift();
+  }
+  return result;
+}
+
+async function queueConversationForFollowUp(
+  io,
+  conversationId,
+  options = {}
+) {
+  if (!io || !conversationId) {
     return false;
   }
 
+  const existing = assignedConversations.get(conversationId);
+  if (existing) {
+    clearTimeout(existing.timeout);
+    assignedConversations.delete(conversationId);
+  }
+
+  const payload = await hydratePendingPayload(conversationId);
+  if (!payload) {
+    return false;
+  }
+
+  ensurePayloadArrays(payload);
+  payload.followUp = true;
+  payload.followUpReason = options.reason || "client_return";
+  payload.assignedAdminId = null;
+  payload.isUpdate = false;
+  payload.updatedAt = Date.now();
+  payload.attemptedAdminIds = [];
+  payload.recentlyTimedOutAdmins = [];
+  pendingMessages.set(conversationId, payload);
+
+  await handleClientMessage(io, { conversationId });
+  return true;
+}
+
+function assignToAdmin(io, adminId, conversationId, payload, options = {}) {
+  const socketIds = getAdminSocketIds(adminId);
+  if (!socketIds.length) {
+    return false;
+  }
+
+  ensurePayloadArrays(payload);
+  payload.attemptedAdminIds = pushUniqueLimited(
+    payload.attemptedAdminIds,
+    adminId,
+    ASSIGNMENT_ATTEMPT_LIMIT
+  );
+
   const timeout = setTimeout(() => {
     console.log(
-      "[dispatcher] délai dépassé pour admin",
+      "[dispatcher] delai depasse pour admin",
       adminId,
       "sur conversation",
       conversationId
@@ -264,11 +529,24 @@ function assignToAdmin(io, adminId, conversationId, payload, isUpdate) {
     assignedConversations.delete(conversationId);
     const entry = pendingMessages.get(conversationId);
     if (entry) {
+      ensurePayloadArrays(entry);
       entry.assignedAdminId = null;
+      entry.recentlyTimedOutAdmins = pushUniqueLimited(
+        entry.recentlyTimedOutAdmins,
+        adminId,
+        MAX_TIMEOUT_HISTORY
+      );
       pendingMessages.set(conversationId, entry);
     }
+    setConversationAssignedAdmin(conversationId, null).catch((err) => {
+      console.error(
+        "[dispatcher] impossible de liberer apres delai",
+        conversationId,
+        err
+      );
+    });
     handleClientMessage(io, { conversationId }).catch((err) => {
-      console.error("[dispatcher] ré-attribution échouée", err);
+      console.error("[dispatcher] re-attribution echouee", err);
     });
   }, ASSIGNMENT_TIMEOUT_MS);
 
@@ -280,10 +558,21 @@ function assignToAdmin(io, adminId, conversationId, payload, isUpdate) {
   });
 
   payload.assignedAdminId = adminId;
-  payload.isUpdate = Boolean(isUpdate);
+  payload.isUpdate = Boolean(options.isUpdate);
+  payload.updatedAt = Date.now();
   pendingMessages.set(conversationId, payload);
 
-  io.to(socketId).emit("new_message_for_admin", payload);
-  console.log("[dispatcher] conversation", conversationId, "envoyée à l'admin", adminId);
+  setConversationAssignedAdmin(conversationId, adminId).catch((err) => {
+    console.error(
+      "[dispatcher] impossible d'enregistrer l'assignation",
+      conversationId,
+      "->",
+      adminId,
+      err
+    );
+  });
+
+  emitToAdminSockets(io, adminId, "new_message_for_admin", payload);
+  console.log("[dispatcher] conversation", conversationId, "envoyee a l'admin", adminId);
   return true;
 }

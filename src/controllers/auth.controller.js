@@ -9,6 +9,12 @@ const {
   renderWelcomeClient,
   renderClientActivationMail,
 } = require("../services/mailTemplates");
+const {
+  getConversationsAwaitingClientReply,
+} = require("../services/conversation.service");
+const {
+  queueConversationForFollowUp,
+} = require("../sockets/messages-dispatcher");
 
 // Token expiration settings (see utils/token.js for durations)
 const REFRESH_EXPIRES_DAYS = 7;
@@ -181,6 +187,16 @@ module.exports = {
         });
       }
 
+      const previousLoginAt = client.last_login
+        ? new Date(client.last_login)
+        : null;
+      const now = new Date();
+      const returningAfter24h =
+        previousLoginAt &&
+        now.getTime() - previousLoginAt.getTime() >= 24 * 60 * 60 * 1000;
+
+      await client.update({ last_login: now });
+
       const accessToken = generateAccessToken(client);
       const refreshToken = generateRefreshToken();
 
@@ -203,6 +219,30 @@ module.exports = {
         ],
       });
 
+      if (returningAfter24h) {
+        try {
+          const followUpConversationIds =
+            await getConversationsAwaitingClientReply(client.id);
+          if (followUpConversationIds.length > 0) {
+            const io = req.app?.get("io");
+            if (io) {
+              await Promise.all(
+                followUpConversationIds.map((conversationId) =>
+                  queueConversationForFollowUp(io, conversationId, {
+                    reason: "client_return",
+                  })
+                )
+              );
+            }
+          }
+        } catch (followUpErr) {
+          console.error(
+            "[auth] Impossible de re-assigner les conversations en attente:",
+            followUpErr
+          );
+        }
+      }
+
       return res.status(200).json({
         accessToken,
         refreshToken,
@@ -211,6 +251,34 @@ module.exports = {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur lors de la connexion." });
+    }
+  },
+  // GET /auth/profile
+  profile: async (req, res) => {
+    try {
+      const clientId = req.user?.id;
+      if (!clientId) {
+        return res.status(401).json({ message: "Token invalide." });
+      }
+
+      const client = await Client.findByPk(clientId, {
+        attributes: { exclude: ["mot_de_passe"] },
+        include: [
+          { association: "pays", attributes: ["id", "name"] },
+          { association: "ville", attributes: ["id", "name"] },
+        ],
+      });
+
+      if (!client) {
+        return res.status(404).json({ message: "Client introuvable." });
+      }
+
+      return res.status(200).json({ client });
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la recuperation du profil." });
     }
   },
   // POST /auth/refresh

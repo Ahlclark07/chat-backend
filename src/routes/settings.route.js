@@ -14,5 +14,15 @@ router.patch(
   authenticateAdminJWT,
   controller.updateAutoMessages
 );
+router.get(
+  "/settings/homepage-girls",
+  authenticateAdminJWT,
+  controller.getHomepageGirls
+);
+router.put(
+  "/settings/homepage-girls",
+  authenticateAdminJWT,
+  controller.updateHomepageGirls
+);
 
 module.exports = router;

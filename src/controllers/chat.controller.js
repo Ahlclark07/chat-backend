@@ -78,6 +78,7 @@ module.exports.sendMessage = async (req, res) => {
       receiver_id: girlId,
       body,
       media_url: mediaPath,
+      is_follow_up: false,
     });
     // Forbidden words alert (client message)
     if (body) {

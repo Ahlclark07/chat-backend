@@ -26,6 +26,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "girl_id",
         as: "photos",
       });
+
+      Girl.hasOne(models.HomepageGirl, {
+        foreignKey: "girl_id",
+        as: "homepageSpot",
+      });
     }
   }
   Girl.init(

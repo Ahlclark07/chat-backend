@@ -24,6 +24,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "admin_id",
         as: "signalements",
       });
+      Admin.hasMany(models.HomepageGirl, {
+        foreignKey: "added_by",
+        as: "homepageSelections",
+      });
+      if (models.ConversationAdminStat) {
+        Admin.hasMany(models.ConversationAdminStat, {
+          foreignKey: "admin_id",
+          as: "conversationStats",
+        });
+      }
     }
   }
 
@@ -40,6 +50,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
+      },
+      current_session_token: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      current_session_started_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
       },
     },
 

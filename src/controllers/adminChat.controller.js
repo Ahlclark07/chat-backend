@@ -1,5 +1,30 @@
 const { AdminGirl, Girl, Conversation, Message } = require("../../models");
 const { Op } = require("sequelize");
+const {
+  incrementAdminParticipation,
+} = require("../services/conversationAssignment.service");
+
+function parseBoolean(value, fallback = false) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
+}
 
 module.exports = {
   // 1️⃣ Voir les girls assignées
@@ -109,7 +134,7 @@ module.exports = {
   replyAsGirl: async (req, res) => {
     try {
       const { id: conversationId } = req.params;
-      const { body } = req.body;
+      const { body, isFollowUp, is_follow_up } = req.body;
 
       const conv = await Conversation.findByPk(conversationId);
       if (!conv)
@@ -124,8 +149,13 @@ module.exports = {
       const message = await Message.create({
         conversation_id: conversationId,
         sender_type: "girl",
+        sender_id: req.admin.id,
+        receiver_id: conv.client_id,
         body,
+        is_follow_up: parseBoolean(isFollowUp ?? is_follow_up, false),
       });
+
+      await incrementAdminParticipation(conversationId, req.admin.id);
 
       // Forbidden words alert when admin (as girl) sends a message
       if (body) {
