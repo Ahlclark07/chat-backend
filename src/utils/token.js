@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const ACCESS_EXPIRES_IN = "15m";
+const ACCESS_EXPIRES_IN = "1h";
 const REFRESH_EXPIRES_IN = "7d";
 function generateAccessToken(client) {
   return jwt.sign({ id: client.id, role: "client" }, JWT_SECRET, {

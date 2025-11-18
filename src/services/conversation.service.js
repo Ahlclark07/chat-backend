@@ -1,5 +1,6 @@
 const { Conversation, Message, Girl, Client, Admin } = require("../../models");
 const { Op, Sequelize } = require("sequelize");
+const { formatMessages } = require("../utils/messageFormatter");
 
 function buildGirlWithPhotosInclude() {
   return {
@@ -33,11 +34,10 @@ async function getConversationsForClient(clientId) {
   });
 }
 
-async function getLastMessagesForConversation(conversationId, limit = 7) {
-  const messages = await Message.findAll({
+async function getLastMessagesForConversation(conversationId, limit = null) {
+  const queryOptions = {
     where: { conversation_id: conversationId },
     order: [["createdAt", "DESC"]],
-    limit,
     include: [
       {
         model: Conversation,
@@ -47,41 +47,66 @@ async function getLastMessagesForConversation(conversationId, limit = 7) {
           {
             model: Admin,
             as: "assigned_admin",
-            attributes: ["id", "identifiant"],
+            attributes: ["id", "nom", "prenom", "identifiant"],
+          },
+        ],
+      },
+      {
+        model: Admin,
+        as: "sender_admin",
+        attributes: ["id", "nom", "prenom", "identifiant"],
+      },
+    ],
+  };
+
+  if (Number.isInteger(limit) && limit > 0) {
+    queryOptions.limit = limit;
+  }
+
+  const messages = await Message.findAll(queryOptions);
+  const orderedMessages = messages.reverse();
+  return formatMessages(orderedMessages);
+}
+
+async function getConversationWithClientAndGirl(conversationId) {
+  const conversationInstance = await Conversation.findByPk(conversationId, {
+    include: [
+      { model: Client, as: "client" },
+      buildGirlWithPhotosInclude(),
+      {
+        model: Admin,
+        as: "assigned_admin",
+        attributes: ["id", "nom", "prenom", "identifiant"],
+      },
+      {
+        model: Message,
+        as: "messages",
+        separate: true,
+        order: [["createdAt", "ASC"]],
+        include: [
+          {
+            model: Admin,
+            as: "sender_admin",
+            attributes: ["id", "nom", "prenom", "identifiant"],
           },
         ],
       },
     ],
   });
 
-  return messages.reverse().map((messageInstance) => {
-    const message = messageInstance.toJSON();
+  if (!conversationInstance) {
+    return null;
+  }
 
-    if (message.sender_type === "girl") {
-      if (message.sender_id) {
-        message.sender_admin_id = message.sender_id;
-      }
-      const adminIdentifiant =
-        message.conversation?.assigned_admin?.identifiant || null;
-      if (adminIdentifiant) {
-        message.assigned_admin_identifiant = adminIdentifiant;
-      }
+  const jsonConversation = conversationInstance.toJSON();
+  jsonConversation.messages = formatMessages(
+    conversationInstance.messages || [],
+    {
+      assignedAdmin: jsonConversation.assigned_admin,
     }
+  );
 
-    delete message.conversation;
-    return message;
-  });
-}
-
-async function getConversationWithClientAndGirl(conversationId) {
-  console.log(conversationId);
-  return await Conversation.findByPk(conversationId, {
-    include: [
-      { model: Client, as: "client" },
-      buildGirlWithPhotosInclude(),
-      { model: Message, as: "messages" },
-    ],
-  });
+  return jsonConversation;
 }
 
 async function getUnprocessedClientConversations() {

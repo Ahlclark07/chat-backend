@@ -59,6 +59,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      current_session_device_hash: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
     },
 
     {

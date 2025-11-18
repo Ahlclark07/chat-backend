@@ -16,6 +16,13 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "message_id",
         as: "autoDelivery",
       });
+      if (models.Admin) {
+        Message.belongsTo(models.Admin, {
+          foreignKey: "sender_id",
+          as: "sender_admin",
+          constraints: false,
+        });
+      }
     }
   }
 

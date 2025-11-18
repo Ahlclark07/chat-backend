@@ -384,7 +384,7 @@ async function hydratePendingPayload(conversationId, baseConversation) {
     payload.assignedAdminId = conversation?.assigned_admin_id || null;
   }
 
-  const lastMessages = await getLastMessagesForConversation(conversationId, 7);
+  const lastMessages = await getLastMessagesForConversation(conversationId);
   payload.lastMessages = lastMessages;
   payload.updatedAt = Date.now();
   pendingMessages.set(conversationId, payload);

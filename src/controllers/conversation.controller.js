@@ -1,4 +1,4 @@
-const { Conversation, Message, Client, Girl } = require("../../models");
+const { Conversation, Message, Client, Girl, Admin } = require("../../models");
 const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
@@ -6,6 +6,10 @@ const {
   incrementAdminParticipation,
 } = require("../services/conversationAssignment.service");
 const { clientIdToSocketId } = require("../sockets/index");
+const {
+  formatMessages,
+  scrubIdentifiant,
+} = require("../utils/messageFormatter");
 
 function parseBoolean(value, fallback = false) {
   if (value === undefined || value === null) {
@@ -33,19 +37,45 @@ function parseBoolean(value, fallback = false) {
 exports.getConversationsForGirl = async (req, res) => {
   const { girl_id } = req.params;
   try {
+    const exposeIdentifiant = req.admin?.role === "god";
     const conversations = await Conversation.findAll({
       where: { girl_id },
       include: [
         { model: Client, as: "client" },
         {
+          model: Admin,
+          as: "assigned_admin",
+          attributes: ["id", "nom", "prenom", "identifiant"],
+        },
+        {
           association: "messages",
           separate: true,
           order: [["createdAt", "ASC"]],
+          include: [
+            {
+              model: Admin,
+              as: "sender_admin",
+              attributes: ["id", "nom", "prenom", "identifiant"],
+            },
+          ],
         },
       ],
       order: [["updatedAt", "DESC"]],
     });
-    res.json(conversations);
+
+    const formatted = conversations.map((conversation) => {
+      const json = conversation.toJSON();
+      json.messages = formatMessages(conversation.messages || [], {
+        assignedAdmin: json.assigned_admin,
+        exposeAdminIdentifiers: exposeIdentifiant,
+      });
+      if (!exposeIdentifiant && json.assigned_admin) {
+        json.assigned_admin = scrubIdentifiant(json.assigned_admin, false);
+      }
+      return json;
+    });
+
+    res.json(formatted);
   } catch (err) {
     console.log(err);
     res
@@ -58,11 +88,41 @@ exports.getConversationsForGirl = async (req, res) => {
 exports.getMessagesForConversation = async (req, res) => {
   const { conversation_id } = req.params;
   try {
+    const exposeIdentifiant = req.admin?.role === "god";
+    const conversation = await Conversation.findByPk(conversation_id, {
+      include: [
+        {
+          model: Admin,
+          as: "assigned_admin",
+          attributes: ["id", "nom", "prenom", "identifiant"],
+        },
+      ],
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation introuvable." });
+    }
+
     const messages = await Message.findAll({
       where: { conversation_id },
       order: [["createdAt", "ASC"]],
+      include: [
+        {
+          model: Admin,
+          as: "sender_admin",
+          attributes: ["id", "nom", "prenom", "identifiant"],
+        },
+      ],
     });
-    res.json(messages);
+
+    res.json(
+      formatMessages(messages, {
+        assignedAdmin: conversation.assigned_admin?.toJSON
+          ? conversation.assigned_admin.toJSON()
+          : conversation.assigned_admin,
+        exposeAdminIdentifiers: exposeIdentifiant,
+      })
+    );
   } catch (err) {
     console.log(err);
     res

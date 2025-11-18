@@ -1,38 +1,174 @@
-const { Signalement, Admin } = require("../../models");
+const {
+  Signalement,
+  Admin,
+  Conversation,
+  Client,
+  Girl,
+  Message,
+} = require("../../models");
+const {
+  formatMessages,
+  scrubIdentifiant,
+} = require("../utils/messageFormatter");
 
 const ALLOWED_STATUS = ["en_cours", "termine"];
+
+function buildConversationInclude({ includeMessages = false } = {}) {
+  const include = {
+    model: Conversation,
+    as: "conversation",
+    include: [
+      {
+        model: Client,
+        as: "client",
+        attributes: ["id", "nom", "prenom"],
+      },
+      {
+        model: Girl,
+        as: "girl",
+        attributes: ["id", "nom", "prenom"],
+      },
+      {
+        model: Admin,
+        as: "assigned_admin",
+        attributes: ["id", "nom", "prenom", "identifiant"],
+      },
+    ],
+  };
+
+  if (includeMessages) {
+    include.include.push({
+      model: Message,
+      as: "messages",
+      separate: true,
+      order: [["createdAt", "ASC"]],
+      include: [
+        {
+          model: Admin,
+          as: "sender_admin",
+          attributes: ["id", "nom", "prenom", "identifiant"],
+        },
+      ],
+    });
+  }
+
+  return include;
+}
+
+const AUTHOR_INCLUDE = {
+  model: Admin,
+  as: "auteur",
+  attributes: ["id", "nom", "prenom", "email", "role"],
+};
+
+function presentSignalement(
+  instance,
+  { includeMessages = false, exposeAdminIdentifiers = false } = {}
+) {
+  if (!instance) {
+    return null;
+  }
+  const json = instance.toJSON();
+  if (json.auteur) {
+    json.auteur = scrubIdentifiant(json.auteur, exposeAdminIdentifiers);
+  }
+
+  if (json.conversation?.assigned_admin) {
+    json.conversation.assigned_admin = scrubIdentifiant(
+      json.conversation.assigned_admin,
+      exposeAdminIdentifiers
+    );
+  }
+
+  if (includeMessages && json.conversation) {
+    const messagesArray = Array.isArray(json.conversation.messages)
+      ? json.conversation.messages
+      : [];
+    const assignedAdmin = json.conversation.assigned_admin || null;
+    json.conversation.messages = formatMessages(messagesArray, {
+      assignedAdmin,
+      exposeAdminIdentifiers,
+    });
+  } else if (json.conversation?.messages) {
+    delete json.conversation.messages;
+  }
+
+  return json;
+}
+
+async function loadSignalementById(
+  id,
+  { includeMessages = false, exposeAdminIdentifiers = false } = {}
+) {
+  const record = await Signalement.findByPk(id, {
+    include: [
+      AUTHOR_INCLUDE,
+      buildConversationInclude({ includeMessages }),
+    ],
+  });
+  if (!record) {
+    return null;
+  }
+  return presentSignalement(record, {
+    includeMessages,
+    exposeAdminIdentifiers,
+  });
+}
 
 module.exports = {
   async create(req, res) {
     try {
-      const { message } = req.body;
+      const {
+        message,
+        conversation_id: snakeConversationId,
+        conversationId,
+      } = req.body;
+      const exposeIdentifiant = req.admin?.role === "god";
       if (!message || typeof message !== "string" || !message.trim()) {
         return res.status(400).json({
           message: "Le message du signalement est obligatoire.",
         });
       }
 
+      let parsedConversationId = snakeConversationId ?? conversationId ?? null;
+      if (parsedConversationId !== null && parsedConversationId !== undefined) {
+        parsedConversationId = parseInt(parsedConversationId, 10);
+        if (Number.isNaN(parsedConversationId)) {
+          return res.status(400).json({
+            message: "L'identifiant de conversation est invalide.",
+          });
+        }
+        const conversationExists = await Conversation.findByPk(
+          parsedConversationId,
+          {
+            attributes: ["id"],
+          }
+        );
+        if (!conversationExists) {
+          return res
+            .status(404)
+            .json({ message: "Conversation liee introuvable." });
+        }
+      } else {
+        parsedConversationId = null;
+      }
+
       const signalement = await Signalement.create({
         admin_id: req.admin.id,
         message: message.trim(),
+        conversation_id: parsedConversationId,
       });
 
-      const signalementWithAuthor = await Signalement.findByPk(signalement.id, {
-        include: [
-          {
-            model: Admin,
-            as: "auteur",
-            attributes: ["id", "nom", "prenom", "email", "role"],
-          },
-        ],
+      const payload = await loadSignalementById(signalement.id, {
+        exposeAdminIdentifiers: exposeIdentifiant,
       });
 
-      return res.status(201).json(signalementWithAuthor);
+      return res.status(201).json(payload);
     } catch (error) {
       console.error(error);
       return res
         .status(500)
-        .json({ message: "Erreur lors de la création du signalement." });
+        .json({ message: "Erreur lors de la creation du signalement." });
     }
   },
 
@@ -41,6 +177,7 @@ module.exports = {
       const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
       const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
       const { status } = req.query;
+      const exposeIdentifiant = req.admin?.role === "god";
 
       const where = {};
       if (status) {
@@ -54,13 +191,7 @@ module.exports = {
 
       const { rows, count } = await Signalement.findAndCountAll({
         where,
-        include: [
-          {
-            model: Admin,
-            as: "auteur",
-            attributes: ["id", "nom", "prenom", "email", "role"],
-          },
-        ],
+        include: [AUTHOR_INCLUDE, buildConversationInclude()],
         order: [["createdAt", "DESC"]],
         limit,
         offset: (page - 1) * limit,
@@ -71,7 +202,11 @@ module.exports = {
         page,
         pageSize: limit,
         totalPages: Math.ceil(count / limit),
-        data: rows,
+        data: rows.map((row) =>
+          presentSignalement(row, {
+            exposeAdminIdentifiers: exposeIdentifiant,
+          })
+        ),
       });
     } catch (error) {
       console.error(error);
@@ -84,14 +219,10 @@ module.exports = {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const signalement = await Signalement.findByPk(id, {
-        include: [
-          {
-            model: Admin,
-            as: "auteur",
-            attributes: ["id", "nom", "prenom", "email", "role"],
-          },
-        ],
+      const exposeIdentifiant = req.admin?.role === "god";
+      const signalement = await loadSignalementById(id, {
+        includeMessages: true,
+        exposeAdminIdentifiers: exposeIdentifiant,
       });
 
       if (!signalement) {
@@ -103,7 +234,7 @@ module.exports = {
       console.error(error);
       return res
         .status(500)
-        .json({ message: "Erreur lors de la récupération du signalement." });
+        .json({ message: "Erreur lors de la recuperation du signalement." });
     }
   },
 
@@ -135,14 +266,10 @@ module.exports = {
 
       await signalement.update(updates);
 
-      const refreshed = await Signalement.findByPk(id, {
-        include: [
-          {
-            model: Admin,
-            as: "auteur",
-            attributes: ["id", "nom", "prenom", "email", "role"],
-          },
-        ],
+      const exposeIdentifiant = req.admin?.role === "god";
+      const refreshed = await loadSignalementById(id, {
+        includeMessages: true,
+        exposeAdminIdentifiers: exposeIdentifiant,
       });
 
       return res.json(refreshed);

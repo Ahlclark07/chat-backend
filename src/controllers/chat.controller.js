@@ -4,14 +4,13 @@ const {
   CreditTransaction,
   Girl,
   Client,
+  Setting,
+  sequelize,
 } = require("../../models");
 const { handleClientMessage } = require("../sockets/messages-dispatcher");
-
-const { Op } = require("sequelize");
-const path = require("path");
-const fs = require("fs");
 const { findForbiddenWordsIn } = require("../utils/forbiddenWords.util");
 const { notifyForbiddenWordAlert } = require("../services/alert.service");
+
 // GET /chat/conversations
 module.exports.getClientConversations = async (req, res) => {
   try {
@@ -40,47 +39,100 @@ module.exports.getClientConversations = async (req, res) => {
 };
 
 module.exports.sendMessage = async (req, res) => {
+  let transaction;
   try {
     const clientId = req.user.id;
-    const girlId = parseInt(req.params.girl_id); // girl_id passé dans l'URL
+    const girlId = parseInt(req.params.girl_id, 10); // girl_id passe dans l'URL
     const { body } = req.body;
 
     if (!body && !req.files?.media) {
       return res.status(400).json({ message: "Message vide." });
     }
 
-    // Vérifier ou créer la conversation
-    let conversation = await Conversation.findOne({
-      where: {
-        client_id: clientId,
-        girl_id: girlId,
-      },
-    });
-
-    if (!conversation) {
-      conversation = await Conversation.create({
-        client_id: clientId,
-        girl_id: girlId,
-      });
-    }
-
-    // Gestion du média
     let mediaPath = null;
     if (req.file) {
       mediaPath = req.file.filename;
     }
 
-    // Créer le message
-    const message = await Message.create({
-      conversation_id: conversation.id,
-      sender_type: "client",
-      sender_id: clientId,
-      receiver_id: girlId,
-      body,
-      media_url: mediaPath,
-      is_follow_up: false,
+    transaction = await sequelize.transaction();
+
+    const [client, costSetting] = await Promise.all([
+      Client.findByPk(clientId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      }),
+      Setting.findOne({
+        where: { key: "coin_cost_per_message" },
+        transaction,
+      }),
+    ]);
+
+    if (!client) {
+      await transaction.rollback();
+      return res.status(404).json({ message: "Client introuvable." });
+    }
+
+    const parsedCost = parseInt(costSetting?.value, 10);
+    const cost =
+      Number.isFinite(parsedCost) && parsedCost > 0 ? parsedCost : 1;
+
+    if ((client.credit_balance ?? 0) < cost) {
+      await transaction.rollback();
+      return res
+        .status(402)
+        .json({ message: "Solde insuffisant pour envoyer ce message." });
+    }
+
+    // Verifier ou creer la conversation
+    let conversation = await Conversation.findOne({
+      where: {
+        client_id: clientId,
+        girl_id: girlId,
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
     });
-    // Forbidden words alert (client message)
+
+    if (!conversation) {
+      conversation = await Conversation.create(
+        {
+          client_id: clientId,
+          girl_id: girlId,
+        },
+        { transaction }
+      );
+    }
+
+    const message = await Message.create(
+      {
+        conversation_id: conversation.id,
+        sender_type: "client",
+        sender_id: clientId,
+        receiver_id: girlId,
+        body,
+        media_url: mediaPath,
+        is_follow_up: false,
+      },
+      { transaction }
+    );
+
+    await client.update(
+      { credit_balance: client.credit_balance - cost },
+      { transaction }
+    );
+
+    await CreditTransaction.create(
+      {
+        client_id: clientId,
+        conversation_id: conversation.id,
+        message_id: message.id,
+        amount: -cost,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+
     if (body) {
       try {
         const matched = await findForbiddenWordsIn(body);
@@ -94,26 +146,20 @@ module.exports.sendMessage = async (req, res) => {
         }
       } catch (_) {}
     }
-    const client = await Client.findByPk(clientId);
-    // Coût paramétrable par Setting (défaut 1)
-    const { Setting } = require("../../models");
-    const s = await Setting.findOne({ where: { key: "coin_cost_per_message" } });
-    const cost = s ? parseInt(s.value, 10) || 1 : 1;
-    await client.update({ credit_balance: client.credit_balance - cost });
-    await CreditTransaction.create({
-      client_id: clientId,
-      conversation_id: conversation.id,
-      message_id: message.id,
-      amount: -cost,
-    });
 
     const io = req.app.get("io");
-    // 🚨 Si c’est bien un client qui envoie
     await handleClientMessage(io, {
       conversationId: conversation.id,
     });
     return res.status(201).json({ message });
   } catch (err) {
+    if (transaction && !transaction.finished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        console.error("Rollback error:", rollbackErr);
+      }
+    }
     console.error(err);
     return res
       .status(500)

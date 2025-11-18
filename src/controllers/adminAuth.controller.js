@@ -5,38 +5,35 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { Admin, AdminActivityLog } = require("../../models");
 const {
-  parseAdminSessions,
-  serializeAdminSessions,
-  cleanupExpiredSessions,
-  addSession,
-  removeSession,
-  getLastSessionDate,
-  DEFAULT_SESSION_MAX_AGE_MS,
-} = require("../utils/adminSession.util");
-const {
-  getAdminActiveSocketCount,
-} = require("../sockets/messages-dispatcher");
-
+  extractRequestDeviceIdentity,
+} = require("../utils/deviceFingerprint");
+const { logAdminAuth } = require("../utils/adminAuthLogger");
 const JWT_SECRET = process.env.JWT_SECRET;
-const MAX_ADMIN_SESSION_MS = DEFAULT_SESSION_MAX_AGE_MS;
-const MAX_CONCURRENT_ADMIN_SESSIONS = Math.max(
-  1,
-  parseInt(process.env.MAX_CONCURRENT_ADMIN_SESSIONS || "2", 10) || 2
-);
-
-const buildActivityDetails = (req) => {
-  const ip =
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket?.remoteAddress ||
-    null;
-  const userAgent = req.headers["user-agent"] || "unknown";
-  return { ip, userAgent };
-};
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const ADMIN_SESSION_IDLE_TIMEOUT_MS =
+  parseInt(
+    process.env.ADMIN_SESSION_IDLE_TIMEOUT_MS ||
+      `${DEFAULT_SESSION_IDLE_TIMEOUT_MS}`,
+    10
+  ) || DEFAULT_SESSION_IDLE_TIMEOUT_MS;
 
 module.exports = {
   async login(req, res) {
     try {
-      const { email, mot_de_passe } = req.body;
+      const {
+        email,
+        mot_de_passe,
+        session_id: previousSessionId,
+        sessionId: camelSessionId,
+      } = req.body;
+      const providedSessionId =
+        previousSessionId || camelSessionId || req.body?.session;
+      const normalizedSessionId = providedSessionId
+        ? String(providedSessionId).trim()
+        : null;
+      const { ip, userAgent, fingerprint: deviceFingerprint } =
+        extractRequestDeviceIdentity(req);
+
       let admin = null;
 
       if (email.includes("@")) {
@@ -45,16 +42,35 @@ module.exports = {
         admin = await Admin.findOne({ where: { identifiant: email } });
       }
 
+      logAdminAuth("LOGIN_ATTEMPT", {
+        email,
+        adminId: admin?.id || null,
+        providedSessionId: normalizedSessionId,
+        ip,
+        userAgent,
+        fingerprint: deviceFingerprint,
+      });
+
       if (!admin) {
+        logAdminAuth("LOGIN_FAILED_UNKNOWN_ADMIN", {
+          email,
+          providedSessionId: normalizedSessionId,
+          ip,
+          userAgent,
+        });
         return res
           .status(400)
           .json({ message: "Email ou mot de passe incorrect." });
       }
 
-      const { ip, userAgent } = buildActivityDetails(req);
-
       const isValid = await bcrypt.compare(mot_de_passe, admin.mot_de_passe);
       if (!isValid) {
+        logAdminAuth("LOGIN_FAILED_INVALID_PASSWORD", {
+          email,
+          adminId: admin.id,
+          ip,
+          userAgent,
+        });
         await AdminActivityLog.create({
           adminId: admin.id,
           action: "LOGIN_FAILED",
@@ -68,115 +84,64 @@ module.exports = {
       }
 
       const now = new Date();
-      const parsedSessions = parseAdminSessions(
-        admin.current_session_token,
-        admin.current_session_started_at
-      );
-      let { active: activeSessions, expired } = cleanupExpiredSessions(
-        parsedSessions,
-        MAX_ADMIN_SESSION_MS,
-        now
-      );
-
-      let serializedActive = serializeAdminSessions(activeSessions);
-      let latestActiveDate = getLastSessionDate(activeSessions);
-
-      const storedSessionDate = admin.current_session_started_at
+      const existingSessionId = admin.current_session_token || null;
+      const lastSeen = admin.current_session_started_at
         ? new Date(admin.current_session_started_at)
         : null;
-      const needsDateUpdate = (() => {
-        if (latestActiveDate && !storedSessionDate) {
-          return true;
-        }
-        if (!latestActiveDate && storedSessionDate) {
-          return true;
-        }
-        if (latestActiveDate && storedSessionDate) {
-          return latestActiveDate.getTime() !== storedSessionDate.getTime();
-        }
-        return false;
-      })();
+      const sessionStillActive =
+        existingSessionId &&
+        lastSeen &&
+        now.getTime() - lastSeen.getTime() < ADMIN_SESSION_IDLE_TIMEOUT_MS;
 
-      if (
-        expired.length > 0 ||
-        serializedActive !== admin.current_session_token ||
-        needsDateUpdate
-      ) {
-        await admin.update({
-          current_session_token: serializedActive,
-          current_session_started_at: latestActiveDate,
+      const fingerprintMatches =
+        sessionStillActive &&
+        admin.current_session_device_hash &&
+        deviceFingerprint &&
+        admin.current_session_device_hash === deviceFingerprint;
+
+      const providedSessionMatches =
+        sessionStillActive &&
+        normalizedSessionId &&
+        existingSessionId === normalizedSessionId;
+
+      const isSameSession =
+        sessionStillActive && (providedSessionMatches || fingerprintMatches);
+
+      if (sessionStillActive && !isSameSession) {
+        logAdminAuth("LOGIN_BLOCKED_ACTIVE_SESSION", {
+          email,
+          adminId: admin.id,
+          existingSessionId,
+          providedSessionId: normalizedSessionId,
+          fingerprintMatches,
+          providedSessionMatches,
+          ip,
+          userAgent,
         });
-        admin.current_session_token = serializedActive;
-        admin.current_session_started_at = latestActiveDate;
+        return res.status(423).json({
+          message:
+            "Une session est deja active pour cet admin. Fermez-la avant de vous reconnecter.",
+        });
       }
 
-      const activeSocketCount = getAdminActiveSocketCount(admin.id);
-      if (activeSocketCount === 0 && activeSessions.length > 0) {
-        activeSessions = [];
-        serializedActive = null;
-        latestActiveDate = null;
-
-        await admin.update({
-          current_session_token: null,
-          current_session_started_at: null,
-        });
-        admin.current_session_token = null;
-        admin.current_session_started_at = null;
-      }
-
-      const allowedExistingSessions = Math.max(
-        0,
-        MAX_CONCURRENT_ADMIN_SESSIONS - 1
-      );
-      if (activeSessions.length > allowedExistingSessions) {
-        const sortedByOldest = [...activeSessions].sort((a, b) => {
-          const aDate = new Date(a.startedAt || a.started_at || 0).getTime();
-          const bDate = new Date(b.startedAt || b.started_at || 0).getTime();
-          return aDate - bDate;
-        });
-        const sessionsToRemove = sortedByOldest
-          .slice(0, activeSessions.length - allowedExistingSessions)
-          .map((session) => session.token);
-
-        if (sessionsToRemove.length > 0) {
-          activeSessions = activeSessions.filter(
-            (session) => !sessionsToRemove.includes(session.token)
-          );
-
-          serializedActive = serializeAdminSessions(activeSessions);
-          latestActiveDate = getLastSessionDate(activeSessions);
-
-          await admin.update({
-            current_session_token: serializedActive,
-            current_session_started_at: latestActiveDate,
-          });
-          admin.current_session_token = serializedActive;
-          admin.current_session_started_at = latestActiveDate;
-
-          await Promise.all(
-            sessionsToRemove.map((token) =>
-              AdminActivityLog.create({
-                adminId: admin.id,
-                action: "LOGIN_SESSION_TERMINATED",
-                targetType: "Admin",
-                targetId: admin.id,
-                details: `Session forcee a expirer (token=${token}) pour liberer un slot. Nouvel IP: ${ip}, device: ${userAgent}`,
-              }).catch(() => {})
-            )
-          );
-        }
-      }
-
-      const sessionId = uuidv4();
-      const updatedSessions = addSession(activeSessions, sessionId, now);
-      const serializedSessions = serializeAdminSessions(updatedSessions);
+      const sessionId =
+        isSameSession && existingSessionId ? existingSessionId : uuidv4();
+      const matchSource = !isSameSession
+        ? "new_session"
+        : providedSessionMatches
+        ? "session_token"
+        : fingerprintMatches
+        ? "fingerprint"
+        : "unknown";
 
       await admin.update({
-        current_session_token: serializedSessions,
+        current_session_token: sessionId,
         current_session_started_at: now,
+        current_session_device_hash: deviceFingerprint,
       });
-      admin.current_session_token = serializedSessions;
+      admin.current_session_token = sessionId;
       admin.current_session_started_at = now;
+      admin.current_session_device_hash = deviceFingerprint;
 
       const accessToken = jwt.sign(
         {
@@ -189,9 +154,23 @@ module.exports = {
         { expiresIn: "1d" }
       );
 
+      logAdminAuth(
+        isSameSession ? "LOGIN_SESSION_REFRESH" : "LOGIN_NEW_SESSION",
+        {
+          email,
+          adminId: admin.id,
+          sessionId,
+          existingSessionId,
+          providedSessionId: normalizedSessionId,
+          matchSource,
+          ip,
+          userAgent,
+          fingerprint: deviceFingerprint,
+        }
+      );
       await AdminActivityLog.create({
         adminId: admin.id,
-        action: "LOGIN_SUCCESS",
+        action: isSameSession ? "LOGIN_REFRESH" : "LOGIN_SUCCESS",
         targetType: "Admin",
         targetId: admin.id,
         details: `IP: ${ip}, device: ${userAgent}`,
@@ -200,6 +179,7 @@ module.exports = {
       return res.status(200).json({ accessToken, admin });
     } catch (err) {
       console.error(err);
+      logAdminAuth("LOGIN_ERROR", { error: err.message });
       return res.status(500).json({ message: "Erreur lors de la connexion." });
     }
   },
@@ -208,27 +188,38 @@ module.exports = {
     try {
       const admin = req.adminEntity;
       const sessionId = req.admin?.sessionId || null;
+      const { ip, userAgent, fingerprint } = extractRequestDeviceIdentity(req);
 
-      if (admin) {
-        const parsedSessions = parseAdminSessions(
-          admin.current_session_token,
-          admin.current_session_started_at
-        );
-        const { active: activeSessions } = cleanupExpiredSessions(
-          parsedSessions,
-          MAX_ADMIN_SESSION_MS,
-          new Date()
-        );
-        const remainingSessions = removeSession(activeSessions, sessionId);
-        const serialized = serializeAdminSessions(remainingSessions);
-        const latest = getLastSessionDate(remainingSessions);
+      logAdminAuth("LOGOUT_ATTEMPT", {
+        adminId: req.admin?.id || admin?.id || null,
+        sessionId,
+        ip,
+        userAgent,
+        fingerprint,
+      });
 
+      if (
+        admin &&
+        admin.current_session_token &&
+        admin.current_session_token === sessionId
+      ) {
         await admin.update({
-          current_session_token: serialized,
-          current_session_started_at: latest,
+          current_session_token: null,
+          current_session_started_at: null,
+          current_session_device_hash: null,
         });
-        admin.current_session_token = serialized;
-        admin.current_session_started_at = latest;
+        admin.current_session_token = null;
+        admin.current_session_started_at = null;
+        admin.current_session_device_hash = null;
+        logAdminAuth("LOGOUT_SESSION_CLEARED", {
+          adminId: admin.id,
+          sessionId,
+        });
+      } else {
+        logAdminAuth("LOGOUT_NO_MATCHING_SESSION", {
+          adminId: admin?.id || null,
+          providedSessionId: sessionId,
+        });
       }
 
       await AdminActivityLog.create({
@@ -239,10 +230,22 @@ module.exports = {
         details: "Session terminee par l'utilisateur.",
       }).catch(() => {});
 
+      logAdminAuth("LOGOUT_SUCCESS", {
+        adminId: req.admin?.id || admin?.id || null,
+        sessionId,
+        ip,
+        userAgent,
+      });
+
       return res.status(200).json({ message: "Deconnexion reussie." });
     } catch (err) {
       console.error(err);
+      logAdminAuth("LOGOUT_ERROR", { error: err.message });
       return res.status(500).json({ message: "Erreur lors de la deconnexion." });
     }
+  },
+
+  async heartbeat(req, res) {
+    return res.status(200).json({ ok: true });
   },
 };
