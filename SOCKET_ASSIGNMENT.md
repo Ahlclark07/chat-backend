@@ -28,10 +28,10 @@ Pour chaque message emis par un admin :
 - le service `getLastMessagesForConversation` expose aussi `sender_admin_id` pour faciliter l'affichage cote front.
 
 ## 3. Evenements Socket.IO exposes
-- `register_admin`: appele par le front au login. Si le compte est deja actif, la nouvelle connexion recoit immediatement `force_logout` (`reason: "duplicate_session"`) et est fermee; la premiere session reste active.
+- `register_admin`: appele par le front au login. Si le compte est deja actif, la nouvelle connexion recoit immediatement `force_logout` (`reason: "max_socket_limit"`) et est fermee; la premiere session reste active.
 - `new_message_for_admin`: payload complet d'une conversation client -> admin (voir section 6).
 - `admin_response`: a emettre lorsque l'admin prend en charge le message (juste apres avoir repondu). Cela libere l'assignation server.
-- `force_logout`: emis vers la connexion refusee lorsqu'une double connexion est detectee pour le meme admin.
+- `force_logout`: emis vers la connexion refusee lorsqu'une double connexion est detectee pour le meme admin (`reason: "max_socket_limit"`).
 
 ## 4. Algorithme d'attribution (handleClientMessage)
 1. **Hydratation** : recuperation de la conversation, du client, de la girl, des derniers messages et des meta locales (`pendingMessages`).

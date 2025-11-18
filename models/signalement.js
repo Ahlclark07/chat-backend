@@ -10,6 +10,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
       });
+      Signalement.belongsTo(models.Conversation, {
+        foreignKey: "conversation_id",
+        as: "conversation",
+        onDelete: "SET NULL",
+        onUpdate: "CASCADE",
+      });
     }
   }
 
@@ -30,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       resolved_at: {
         type: DataTypes.DATE,
+        allowNull: true,
+      },
+      conversation_id: {
+        type: DataTypes.INTEGER,
         allowNull: true,
       },
     },

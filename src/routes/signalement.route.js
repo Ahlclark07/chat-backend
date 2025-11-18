@@ -16,14 +16,14 @@ router.post(
 router.get(
   "/signalements",
   authenticateAdminJWT,
-  authorizeRole("god"),
+  authorizeRole("superadmin", "god"),
   controller.list
 );
 
 router.get(
   "/signalements/:id",
   authenticateAdminJWT,
-  authorizeRole("god"),
+  authorizeRole("superadmin", "god"),
   controller.getById
 );
 

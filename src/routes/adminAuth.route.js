@@ -8,6 +8,6 @@ const {
 
 router.post("/login", adminAuth.login);
 router.post("/logout", authenticateAdminJWT, adminAuth.logout);
+router.post("/session/heartbeat", authenticateAdminJWT, adminAuth.heartbeat);
 
 module.exports = router;
-
