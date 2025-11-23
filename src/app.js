@@ -9,22 +9,26 @@ dotenv.config();
 
 const app = express();
 
-const corsOptions = {
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Origin",
-    "X-Requested-With",
-    "Content-Type",
-    "Accept",
-    "Authorization",
-  ],
+const corsOptions = (req, callback) => {
+  const requestHeaders = req.header("Access-Control-Request-Headers");
+  callback(null, {
+    origin: req.header("Origin") || "*",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    // Allow any header requested by the browser
+    allowedHeaders: requestHeaders || "*",
+    exposedHeaders: "*",
+    optionsSuccessStatus: 204,
+    maxAge: 86400,
+  });
 };
 
-app.use(cors(corsOptions));
+const corsMiddleware = cors(corsOptions);
+app.use(corsMiddleware);
+// Handle preflight for any path without using path-to-regexp wildcard
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
+    return corsMiddleware(req, res, () => res.sendStatus(204));
   }
   return next();
 });
@@ -37,17 +41,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 app.use(
   "/uploads",
-  cors(corsOptions),
-  express.static(path.join(__dirname, "..", "uploads"), {
-    setHeaders: (res) => {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-      );
-      res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
-    },
-  })
+  corsMiddleware,
+  express.static(path.join(__dirname, "..", "uploads"))
 );
 
 // =========================
@@ -111,19 +106,20 @@ app.use("/api/test", require("./routes/test.route"));
 app.use((err, req, res, next) => {
   try {
     if (!res.headersSent) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      const requestHeaders = req.header("Access-Control-Request-Headers");
+      const origin = req.header("Origin") || "*";
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader(
         "Access-Control-Allow-Methods",
         "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       );
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-      );
+      res.setHeader("Access-Control-Allow-Headers", requestHeaders || "*");
+      res.setHeader("Access-Control-Expose-Headers", "*");
     }
   } catch (_) {}
   next(err);
 });
 
 module.exports = app;
-
