@@ -77,7 +77,11 @@ function initMessageDispatcher(io) {
       clearTimeout(assignment.timeout);
       assignedConversations.delete(conversationId);
       pendingMessages.delete(conversationId);
-      console.log("[dispatcher] conversation", conversationId, "traitee par l'admin.");
+      console.log(
+        "[dispatcher] conversation",
+        conversationId,
+        "traitee par l'admin."
+      );
 
       await assignPendingConversations(io);
     });
@@ -93,7 +97,11 @@ function initMessageDispatcher(io) {
         sockets.delete(socket.id);
         if (sockets.size === 0) {
           adminSockets.delete(adminId);
-          console.log("[dispatcher] admin", adminId, "deconnecte (plus de socket actif).");
+          console.log(
+            "[dispatcher] admin",
+            adminId,
+            "deconnecte (plus de socket actif)."
+          );
           await releaseAssignmentsForAdmin(io, adminId);
         } else {
           console.log(
@@ -105,7 +113,11 @@ function initMessageDispatcher(io) {
           );
         }
       } else {
-        console.log("[dispatcher] admin", adminId, "deconnecte (aucune socket enregistree).");
+        console.log(
+          "[dispatcher] admin",
+          adminId,
+          "deconnecte (aucune socket enregistree)."
+        );
       }
     });
   });
@@ -164,9 +176,15 @@ async function handleClientMessage(io, { conversationId }) {
     !excluded.has(preferredAdminId) &&
     canAdminTakeMore(preferredAdminId)
   ) {
-    const assigned = assignToAdmin(io, preferredAdminId, conversationId, payload, {
-      isUpdate: false,
-    });
+    const assigned = assignToAdmin(
+      io,
+      preferredAdminId,
+      conversationId,
+      payload,
+      {
+        isUpdate: false,
+      }
+    );
     if (assigned) {
       return;
     }
@@ -175,8 +193,7 @@ async function handleClientMessage(io, { conversationId }) {
 
   const ranked = await getAdminPriorityList(conversationId);
   const rankedAvailable = ranked.filter(
-    (entry) =>
-      !excluded.has(entry.adminId) && canAdminTakeMore(entry.adminId)
+    (entry) => !excluded.has(entry.adminId) && canAdminTakeMore(entry.adminId)
   );
 
   if (rankedAvailable.length > 0) {
@@ -289,23 +306,80 @@ async function releaseAssignmentsForAdmin(io, adminId) {
   }
 }
 
+const OVERFLOW_GRACE_PERIOD_MS = 10000;
+
 function ensureAdminConnection(adminId, socket) {
-  const sockets = adminSockets.get(adminId);
-  if (!sockets) {
-    return true;
-  }
-  if (sockets.has(socket.id)) {
-    return true;
-  }
-  if (sockets.size >= MAX_SOCKET_CONNECTIONS_PER_ADMIN) {
-    console.log(
-      "[dispatcher] connexion refusee (limite sockets) pour l'admin",
-      adminId
-    );
-    socket.emit("force_logout", { reason: "max_socket_limit" });
-    socket.disconnect(true);
-    return false;
-  }
+  // Always accept the connection initially (grace period)
+  // We schedule a check to enforce limits after the grace period
+  setTimeout(() => {
+    const sockets = adminSockets.get(adminId);
+    if (!sockets) return;
+
+    // Convert to array to check order (Set iteration is insertion order)
+    // The newest sockets are at the end
+    const socketList = Array.from(sockets);
+
+    // Check if we are still over the limit
+    if (socketList.length > MAX_SOCKET_CONNECTIONS_PER_ADMIN) {
+      console.log(
+        `[dispatcher] admin ${adminId} over socket limit (${socketList.length}/${MAX_SOCKET_CONNECTIONS_PER_ADMIN}) after grace period. Closing newest.`
+      );
+
+      // We need to close (length - limit) sockets, starting from the newest (end of list)
+      const excessCount = socketList.length - MAX_SOCKET_CONNECTIONS_PER_ADMIN;
+      // Reverse list to start with newest
+      const newestFirst = [...socketList].reverse();
+
+      for (let i = 0; i < excessCount; i++) {
+        const socketIdToClose = newestFirst[i];
+
+        // Find the socket object - we might not have direct access to all socket objects easily
+        // if we only stored IDs in the Set.
+        // But 'io.sockets.sockets' (if accessible) or we can emit to the ID and disconnect.
+        // Wait, socket.io namespaces/sockets handling:
+        // connectedClients and adminSockets only store IDs?
+        // adminSockets = new Map(); // adminId -> Set<socketId>
+        // Yes, only IDs.
+
+        // We can look up the socket object via io if needed, or just specialized logic inside initMessageDispatcher?
+        // Actually ensureAdminConnection doesn't have access to 'io'.
+        // But the 'socket' passed to this function is the current one.
+        // We can't easily disconnect *other* sockets if we don't have the io instance or socket map.
+
+        // However, we can use the connectedAdmins map? No, that maps socketId -> adminId.
+
+        // We have a problem: ensureAdminConnection is outside initMessageDispatcher scope where 'io' is available?
+        // No, ensureAdminConnection is a helper. initMessageDispatcher has 'io'.
+        // But ensureAdminConnection does NOT accept 'io' as arg currently.
+
+        // Let's refactor ensureAdminConnection to take 'io' or handle logic differently.
+        // Or better: The 'socket' argument is a real socket object.
+        // socket.server gives access to io/server.
+        // socket.server.sockets.sockets.get(socketId) should work for Socket.io v4.
+
+        const targetSocket = socket.server.sockets.sockets.get(socketIdToClose);
+        if (targetSocket) {
+          console.log(
+            `[dispatcher] Force disconnect newest socket ${socketIdToClose}`
+          );
+          targetSocket.emit("force_logout", {
+            reason: "max_socket_limit",
+            message:
+              "Trop de fenêtres ouvertes. Cette nouvelle connexion a été fermée.",
+          });
+          targetSocket.disconnect(true);
+
+          // Cleanup Maps immediately
+          sockets.delete(socketIdToClose);
+          connectedAdmins.delete(socketIdToClose);
+          if (sockets.size === 0) {
+            adminSockets.delete(adminId);
+          }
+        }
+      }
+    }
+  }, OVERFLOW_GRACE_PERIOD_MS);
+
   return true;
 }
 
@@ -394,7 +468,12 @@ async function hydratePendingPayload(conversationId, baseConversation) {
 function getAvailableAdmins(excluded = new Set()) {
   const available = [];
   adminSockets.forEach((socketSet, adminId) => {
-    if (socketSet && socketSet.size > 0 && !excluded.has(adminId) && canAdminTakeMore(adminId)) {
+    if (
+      socketSet &&
+      socketSet.size > 0 &&
+      !excluded.has(adminId) &&
+      canAdminTakeMore(adminId)
+    ) {
       available.push(adminId);
     }
   });
@@ -472,11 +551,7 @@ function pushUniqueLimited(list, value, limit) {
   return result;
 }
 
-async function queueConversationForFollowUp(
-  io,
-  conversationId,
-  options = {}
-) {
+async function queueConversationForFollowUp(io, conversationId, options = {}) {
   if (!io || !conversationId) {
     return false;
   }
@@ -573,6 +648,11 @@ function assignToAdmin(io, adminId, conversationId, payload, options = {}) {
   });
 
   emitToAdminSockets(io, adminId, "new_message_for_admin", payload);
-  console.log("[dispatcher] conversation", conversationId, "envoyee a l'admin", adminId);
+  console.log(
+    "[dispatcher] conversation",
+    conversationId,
+    "envoyee a l'admin",
+    adminId
+  );
   return true;
 }

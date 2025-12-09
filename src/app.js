@@ -11,16 +11,25 @@ const app = express();
 
 const corsOptions = (req, callback) => {
   const requestHeaders = req.header("Access-Control-Request-Headers");
-  callback(null, {
-    origin: req.header("Origin") || "*",
-    credentials: true,
+  const origin = req.header("Origin");
+
+  const corsConfig = {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    // Allow any header requested by the browser
     allowedHeaders: requestHeaders || "*",
     exposedHeaders: "*",
     optionsSuccessStatus: 204,
     maxAge: 86400,
-  });
+  };
+
+  if (origin) {
+    corsConfig.origin = origin;
+    corsConfig.credentials = true;
+  } else {
+    corsConfig.origin = "*";
+    corsConfig.credentials = false;
+  }
+
+  callback(null, corsConfig);
 };
 
 const corsMiddleware = cors(corsOptions);
@@ -106,11 +115,16 @@ app.use("/api/test", require("./routes/test.route"));
 app.use((err, req, res, next) => {
   try {
     if (!res.headersSent) {
+      const origin = req.header("Origin");
+      if (origin) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+        res.setHeader("Vary", "Origin");
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
+
       const requestHeaders = req.header("Access-Control-Request-Headers");
-      const origin = req.header("Origin") || "*";
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader(
         "Access-Control-Allow-Methods",
         "GET,POST,PUT,PATCH,DELETE,OPTIONS"
