@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 });
 
 // =========================
-// Middlewares globaux
+// Middlewares globaux v
 // =========================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
