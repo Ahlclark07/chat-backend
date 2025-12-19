@@ -38,6 +38,8 @@ exports.getConversationsForGirl = async (req, res) => {
   const { girl_id } = req.params;
   try {
     const exposeIdentifiant = req.admin?.role === "god";
+
+    // 1. Fetch conversations (lighter query)
     const conversations = await Conversation.findAll({
       where: { girl_id },
       include: [
@@ -47,10 +49,21 @@ exports.getConversationsForGirl = async (req, res) => {
           as: "assigned_admin",
           attributes: ["id", "nom", "prenom", "identifiant"],
         },
-        {
-          association: "messages",
-          separate: true,
-          order: [["createdAt", "ASC"]],
+      ],
+      // We initially order by updatedAt, but we will re-sort by message date
+      order: [["updatedAt", "DESC"]],
+    });
+
+    // 2. Hydrate with LAST message only (N+1 but limited scope is better than 10k messages)
+    // Ideally we would use a lateral join or window function, but Sequelize is tricky there.
+    const conversationsWithLastMessage = await Promise.all(
+      conversations.map(async (conv) => {
+        const json = conv.toJSON();
+
+        // Fetch strictly the last message
+        const lastMsg = await Message.findOne({
+          where: { conversation_id: conv.id },
+          order: [["createdAt", "DESC"]],
           include: [
             {
               model: Admin,
@@ -58,24 +71,44 @@ exports.getConversationsForGirl = async (req, res) => {
               attributes: ["id", "nom", "prenom", "identifiant"],
             },
           ],
-        },
-      ],
-      order: [["updatedAt", "DESC"]],
+        });
+
+        // Format as an array of 1 for compatibility with existing frontend logic (or change frontend)
+        // User asked to mimic frontend which expects 'messages' array usually?
+        // Actually, let's return a special 'last_message' field or a 'messages' array with 1 item.
+        // The existing frontend expects `messages.at(-1)`.
+
+        json.messages = lastMsg ? [lastMsg] : []; // Only the last message!
+
+        // Scrub ID if needed
+        if (lastMsg) {
+          const formattedMsgs = formatMessages([lastMsg], {
+            assignedAdmin: json.assigned_admin,
+            exposeAdminIdentifiers: exposeIdentifiant,
+          });
+          json.messages = formattedMsgs;
+        }
+
+        if (!exposeIdentifiant && json.assigned_admin) {
+          json.assigned_admin = scrubIdentifiant(json.assigned_admin, false);
+        }
+
+        return json;
+      })
+    );
+
+    // 3. Sort Key: Last Message Date > Conversation UpdatedAt
+    conversationsWithLastMessage.sort((a, b) => {
+      const dateA = a.messages.length
+        ? new Date(a.messages[0].createdAt).getTime()
+        : new Date(a.updatedAt).getTime();
+      const dateB = b.messages.length
+        ? new Date(b.messages[0].createdAt).getTime()
+        : new Date(b.updatedAt).getTime();
+      return dateB - dateA;
     });
 
-    const formatted = conversations.map((conversation) => {
-      const json = conversation.toJSON();
-      json.messages = formatMessages(conversation.messages || [], {
-        assignedAdmin: json.assigned_admin,
-        exposeAdminIdentifiers: exposeIdentifiant,
-      });
-      if (!exposeIdentifiant && json.assigned_admin) {
-        json.assigned_admin = scrubIdentifiant(json.assigned_admin, false);
-      }
-      return json;
-    });
-
-    res.json(formatted);
+    res.json(conversationsWithLastMessage);
   } catch (err) {
     console.log(err);
     res
@@ -87,6 +120,9 @@ exports.getConversationsForGirl = async (req, res) => {
 // 2. Recuperer les messages d'une conversation
 exports.getMessagesForConversation = async (req, res) => {
   const { conversation_id } = req.params;
+  const limit = parseInt(req.query.limit, 10) || 100; // Default 100
+  const offset = parseInt(req.query.offset, 10) || 0;
+
   try {
     const exposeIdentifiant = req.admin?.role === "god";
     const conversation = await Conversation.findByPk(conversation_id, {
@@ -105,7 +141,9 @@ exports.getMessagesForConversation = async (req, res) => {
 
     const messages = await Message.findAll({
       where: { conversation_id },
-      order: [["createdAt", "ASC"]],
+      order: [["createdAt", "DESC"]], // Reverse order for pagination (newest first)
+      limit,
+      offset,
       include: [
         {
           model: Admin,
@@ -115,8 +153,15 @@ exports.getMessagesForConversation = async (req, res) => {
       ],
     });
 
+    // We must reverse them back to ASC for display usually, or handle in frontend.
+    // Frontend expects ASC usually (oldest at top).
+    // If we paginate, we usually fetch "last 20".
+
+    // For now, let's return them as is (DESC) and let frontend reverse, or reverse here.
+    const sortedMessages = messages.sort((a, b) => a.id - b.id);
+
     res.json(
-      formatMessages(messages, {
+      formatMessages(sortedMessages, {
         assignedAdmin: conversation.assigned_admin?.toJSON
           ? conversation.assigned_admin.toJSON()
           : conversation.assigned_admin,
@@ -173,12 +218,17 @@ exports.sendMessageAsGirl = async (req, res) => {
       });
     }
 
+    // Check for suspicious content (system alert)
+    // Check for suspicious content (system alert)
+    const { checkSuspiciousContent } = require("../utils/securityScanner");
+    checkSuspiciousContent(body, req.admin.id, conversation_id).catch((err) =>
+      console.error("Suspicious check error:", err)
+    );
+
     res.status(201).json(message);
   } catch (err) {
     console.log(err);
-    res
-      .status(500)
-      .json({ message: "Erreur lors de l'envoi du message." });
+    res.status(500).json({ message: "Erreur lors de l'envoi du message." });
   }
 };
 
@@ -211,11 +261,9 @@ exports.getAvailableClientsForGirl = async (req, res) => {
     res.json(clients);
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({
-        message: "Erreur lors du chargement des clients disponibles.",
-      });
+    res.status(500).json({
+      message: "Erreur lors du chargement des clients disponibles.",
+    });
   }
 };
 
@@ -285,5 +333,32 @@ exports.deleteMessage = async (req, res) => {
   } catch (err) {
     console.error("Erreur lors de la suppression :", err);
     res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+// 7. Recuperer une conversation par ID (Metadata)
+exports.getConversationDetails = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const conversation = await Conversation.findByPk(id, {
+      include: [
+        { model: Girl, as: "girl" },
+        { model: Client, as: "client" },
+        {
+          model: Admin,
+          as: "assigned_admin",
+          attributes: ["id", "nom", "prenom", "identifiant"],
+        },
+      ],
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation introuvable" });
+    }
+
+    res.json(conversation);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };

@@ -86,6 +86,59 @@ function initMessageDispatcher(io) {
       await assignPendingConversations(io);
     });
 
+    socket.on("kill_other_session", async () => {
+      const adminId = connectedAdmins.get(socket.id);
+      if (!adminId) return;
+
+      try {
+        const { Admin } = require("../../models");
+        const admin = await Admin.findByPk(adminId);
+
+        if (!admin) return;
+
+        // Current session in DB (Device B)
+        const currentDbSession = admin.current_session_token;
+        // Device A session (requesting socket)
+        const socketSessionId =
+          socket.handshake.auth.sessionId || socket.sessionId; // Need to ensure we have this
+
+        if (currentDbSession && currentDbSession !== socketSessionId) {
+          console.log(
+            `[dispatcher] Admin ${adminId} (Device A) kills session ${currentDbSession} (Device B)`
+          );
+
+          // 1. Notify Device B
+          // We need to find sockets for Device B. Ideally we track sockets by session ID, but here we track by AdminID.
+          // We can iterate admin's sockets and check their session IDs if we stored them.
+          // For now, we emit to ALL sockets of this admin EXCEPT the sender (Device A).
+          const sockets = adminSockets.get(adminId);
+          if (sockets) {
+            sockets.forEach((sId) => {
+              if (sId !== socket.id) {
+                io.to(sId).emit("force_logout", {
+                  reason: "killed_by_admin",
+                  message: "L'autre connexion a mis fin à votre session.",
+                });
+              }
+            });
+          }
+
+          // 2. Restore Device A session in DB
+          await admin.update({
+            current_session_token: socketSessionId,
+            current_session_started_at: new Date(),
+            current_session_device_hash: null, // Invalidate fingerprint strictness or update it? Let's keep null to be safe or extract from socket if possible.
+          });
+
+          socket.emit("session_restored", {
+            message: "Votre session est de nouveau active.",
+          });
+        }
+      } catch (err) {
+        console.error("[dispatcher] Error processing kill_other_session", err);
+      }
+    });
+
     socket.on("disconnect", async () => {
       const adminId = connectedAdmins.get(socket.id);
       if (!adminId) {
@@ -249,8 +302,17 @@ module.exports = {
   initMessageDispatcher,
   handleClientMessage,
   queueConversationForFollowUp,
+  notifyAdminSessionConflict,
   getAdminActiveSocketCount,
 };
+
+function notifyAdminSessionConflict(io, adminId, newDeviceInfo) {
+  return emitToAdminSockets(io, adminId, "force_logout", {
+    reason: "duplicate_session",
+    message: "Une nouvelle connexion a été détectée sur ce compte.",
+    newDevice: newDeviceInfo,
+  });
+}
 
 async function bootstrapPendingConversations() {
   const unprocessed = await getUnprocessedClientConversations();

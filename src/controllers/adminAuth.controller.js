@@ -4,9 +4,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { Admin, AdminActivityLog } = require("../../models");
-const {
-  extractRequestDeviceIdentity,
-} = require("../utils/deviceFingerprint");
+const { extractRequestDeviceIdentity } = require("../utils/deviceFingerprint");
 const { logAdminAuth } = require("../utils/adminAuthLogger");
 const JWT_SECRET = process.env.JWT_SECRET;
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -31,8 +29,11 @@ module.exports = {
       const normalizedSessionId = providedSessionId
         ? String(providedSessionId).trim()
         : null;
-      const { ip, userAgent, fingerprint: deviceFingerprint } =
-        extractRequestDeviceIdentity(req);
+      const {
+        ip,
+        userAgent,
+        fingerprint: deviceFingerprint,
+      } = extractRequestDeviceIdentity(req);
 
       let admin = null;
 
@@ -108,20 +109,36 @@ module.exports = {
         sessionStillActive && (providedSessionMatches || fingerprintMatches);
 
       if (sessionStillActive && !isSameSession) {
-        logAdminAuth("LOGIN_BLOCKED_ACTIVE_SESSION", {
+        logAdminAuth("LOGIN_CONFLICT_SESSION_NOTIFIED", {
           email,
           adminId: admin.id,
           existingSessionId,
           providedSessionId: normalizedSessionId,
-          fingerprintMatches,
-          providedSessionMatches,
           ip,
           userAgent,
         });
-        return res.status(423).json({
-          message:
-            "Une session est deja active pour cet admin. Fermez-la avant de vous reconnecter.",
-        });
+
+        const {
+          checkRepeatedLoginConflicts,
+        } = require("../services/alert.service");
+        checkRepeatedLoginConflicts(admin.id).catch((err) =>
+          console.error("Error checking conflicts:", err)
+        );
+
+        // Notifier l'ancienne session via socket
+        const io = req.app.get("io");
+        if (io) {
+          const {
+            notifyAdminSessionConflict,
+          } = require("../sockets/messages-dispatcher");
+          notifyAdminSessionConflict(io, admin.id, {
+            ip,
+            userAgent,
+            time: new Date().toISOString(),
+          });
+        }
+
+        // On continue (ne bloque plus) pour permettre la connexion sur le nouvel appareil
       }
 
       const sessionId =
@@ -241,7 +258,9 @@ module.exports = {
     } catch (err) {
       console.error(err);
       logAdminAuth("LOGOUT_ERROR", { error: err.message });
-      return res.status(500).json({ message: "Erreur lors de la deconnexion." });
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la deconnexion." });
     }
   },
 

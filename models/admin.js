@@ -34,6 +34,10 @@ module.exports = (sequelize, DataTypes) => {
           as: "conversationStats",
         });
       }
+      Admin.hasMany(models.SystemAlert, {
+        foreignKey: "admin_id",
+        as: "systemAlerts",
+      });
     }
   }
 
