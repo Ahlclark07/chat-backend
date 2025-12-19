@@ -89,6 +89,7 @@ app.use("/api/admin", adminLogRoutes);
 app.use("/api/admin", require("./routes/settings.route"));
 app.use("/api/admin", require("./routes/autoMessage.route"));
 app.use("/api/admin", require("./routes/forbiddenWord.route"));
+app.use("/api/admin/alerts", require("./routes/systemAlert.route"));
 app.use("/api/admin", require("./routes/signalement.route"));
 
 const suspensionRoutes = require("./routes/suspension.route");

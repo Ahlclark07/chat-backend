@@ -37,4 +37,7 @@ router.get(
 router.delete("/messages/:id", authenticateAdminJWT, controller.deleteMessage);
 
 router.post("/", controller.createConversation);
+
+router.get("/:id", authenticateAdminJWT, controller.getConversationDetails);
+
 module.exports = router;

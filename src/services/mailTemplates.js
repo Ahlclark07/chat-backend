@@ -133,4 +133,48 @@ module.exports = {
   renderWelcomeClient,
   renderClientActivationMail,
   renderForbiddenWordAlert,
+  renderSystemAlert,
 };
+
+function renderSystemAlert(data) {
+  const { type, adminName, details, severity } = data;
+
+  let title = "Alerte Système de Sécurité";
+  let content = "";
+  let subject = `[ALERTE ${severity}] ${type}`;
+
+  if (type === "MULTIPLE_CONNECTIONS") {
+    title = "Alerte : Connexions Multiples Répétées";
+    content = `
+      <p>L'admin <strong>${adminName}</strong> a déclenché une alerte de sécurité.</p>
+      <p>Motif : <strong>3 tentatives de double connexion détectées en moins d'une heure.</strong></p>
+      <p>Détails techniques :</p>
+      <pre>${JSON.stringify(details, null, 2)}</pre>
+      <p>Veuillez vérifier ce compte immédiatement.</p>
+    `;
+  } else if (type === "SUSPICIOUS_CONTENT") {
+    title = "Alerte : Contenu Suspect Détecté";
+    content = `
+      <p>L'admin <strong>${adminName}</strong> a envoyé un message suspect.</p>
+      <p>Motif : <strong>Détection de format interdit (numéro de téléphone ou mot banni).</strong></p>
+      <p>Message :</p>
+      <blockquote style="background: #f9f9f9; padding: 10px; border-left: 5px solid red;">
+        ${details.messageBody}
+      </blockquote>
+      <p>Conversation ID : ${details.conversationId}</p>
+    `;
+  }
+
+  return {
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2 style="color: #d32f2f;">${title}</h2>
+        ${content}
+        <hr>
+        <p style="font-size: 12px; color: #888;">Ceci est un message automatique du système de sécurité.</p>
+      </div>
+    `,
+    text: `ALERTE SYSTEME : ${title}\n\nConcerne : ${adminName}\nMotif : ${type}\n\nConnectez-vous au backoffice pour plus de détails.`,
+  };
+}

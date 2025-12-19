@@ -18,4 +18,6 @@ router.post(
   chatController.sendMessage
 );
 
+router.put("/:girl_id/read", authenticateJWT, chatController.markAsRead);
+
 module.exports = router;

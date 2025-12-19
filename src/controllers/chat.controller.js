@@ -45,7 +45,7 @@ module.exports.sendMessage = async (req, res) => {
     const girlId = parseInt(req.params.girl_id, 10); // girl_id passe dans l'URL
     const { body } = req.body;
 
-    if (!body && !req.files?.media) {
+    if (!body && !req.file) {
       return res.status(400).json({ message: "Message vide." });
     }
 
@@ -73,8 +73,7 @@ module.exports.sendMessage = async (req, res) => {
     }
 
     const parsedCost = parseInt(costSetting?.value, 10);
-    const cost =
-      Number.isFinite(parsedCost) && parsedCost > 0 ? parsedCost : 1;
+    const cost = Number.isFinite(parsedCost) && parsedCost > 0 ? parsedCost : 1;
 
     if ((client.credit_balance ?? 0) < cost) {
       await transaction.rollback();
@@ -147,6 +146,12 @@ module.exports.sendMessage = async (req, res) => {
       } catch (_) {}
     }
 
+    // User requested it tested from "compte client".
+    const { checkSuspiciousContent } = require("../utils/securityScanner");
+    checkSuspiciousContent(body, null, conversation.id, clientId).catch((err) =>
+      console.error(err)
+    );
+
     const io = req.app.get("io");
     await handleClientMessage(io, {
       conversationId: conversation.id,
@@ -164,5 +169,36 @@ module.exports.sendMessage = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Erreur lors de l'envoi du message." });
+  }
+};
+
+module.exports.markAsRead = async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const girlId = parseInt(req.params.girl_id, 10);
+
+    const conversation = await Conversation.findOne({
+      where: { client_id: clientId, girl_id: girlId },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation introuvable." });
+    }
+
+    await Message.update(
+      { is_read: true },
+      {
+        where: {
+          conversation_id: conversation.id,
+          sender_type: "girl",
+          is_read: false,
+        },
+      }
+    );
+
+    return res.status(200).json({ message: "Messages marqués comme lus." });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Erreur serveur." });
   }
 };
