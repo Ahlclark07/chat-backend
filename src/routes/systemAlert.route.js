@@ -14,6 +14,13 @@ router.get(
   controller.getAlerts
 );
 
+router.post(
+  "/",
+  authenticateAdminJWT,
+  authorizeRole("admin", "superadmin", "god"),
+  controller.createAlert
+);
+
 router.patch(
   "/:id/status",
   authenticateAdminJWT,

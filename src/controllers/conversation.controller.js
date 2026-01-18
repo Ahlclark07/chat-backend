@@ -221,9 +221,12 @@ exports.sendMessageAsGirl = async (req, res) => {
     // Check for suspicious content (system alert)
     // Check for suspicious content (system alert)
     const { checkSuspiciousContent } = require("../utils/securityScanner");
-    checkSuspiciousContent(body, req.admin.id, conversation_id).catch((err) =>
-      console.error("Suspicious check error:", err)
-    );
+    checkSuspiciousContent(
+      body,
+      req.admin.id,
+      conversation_id,
+      conversation.client_id
+    ).catch((err) => console.error("Suspicious check error:", err));
 
     res.status(201).json(message);
   } catch (err) {
