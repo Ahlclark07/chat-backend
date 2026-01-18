@@ -1,4 +1,5 @@
 const { SystemAlert, Admin } = require("../../models");
+const { createSystemAlert } = require("../services/alert.service");
 
 exports.getAlerts = async (req, res) => {
   try {
@@ -18,6 +19,42 @@ exports.getAlerts = async (req, res) => {
     res
       .status(500)
       .json({ message: "Erreur lors de la récupération des alertes." });
+  }
+};
+
+exports.createAlert = async (req, res) => {
+  try {
+    const { type, severity, details } = req.body || {};
+    const allowedTypes = new Set(["MULTIPLE_CONNECTIONS"]);
+    if (!allowedTypes.has(type)) {
+      return res.status(400).json({ message: "Type d'alerte invalide." });
+    }
+
+    const payload = {
+      type,
+      severity: severity || "HIGH",
+      status: "OPEN",
+      admin_id: req.admin?.id || null,
+      details: {
+        ...(details && typeof details === "object" ? details : {}),
+        triggered_by: "manual",
+        ip: req.ip,
+        userAgent: req.headers["user-agent"] || null,
+      },
+    };
+
+    const alert = await createSystemAlert(payload);
+    if (!alert) {
+      return res
+        .status(500)
+        .json({ message: "Erreur lors de la creation de l'alerte." });
+    }
+    return res.status(201).json(alert);
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Erreur lors de la creation de l'alerte." });
   }
 };
 

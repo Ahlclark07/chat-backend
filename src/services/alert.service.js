@@ -123,12 +123,6 @@ async function checkSuspiciousContent(
   }
 }
 
-module.exports = {
-  notifyForbiddenWordAlert,
-  createSystemAlert,
-  checkRepeatedLoginConflicts,
-};
-
 async function getGodAdminEmails() {
   const admins = await Admin.findAll({
     where: { role: "god" },
@@ -196,4 +190,8 @@ async function notifyForbiddenWordAlert(context) {
   }
 }
 
-module.exports = { notifyForbiddenWordAlert };
+module.exports = {
+  notifyForbiddenWordAlert,
+  createSystemAlert,
+  checkRepeatedLoginConflicts,
+};

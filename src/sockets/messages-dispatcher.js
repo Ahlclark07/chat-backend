@@ -133,6 +133,10 @@ function initMessageDispatcher(io) {
           socket.emit("session_restored", {
             message: "Votre session est de nouveau active.",
           });
+        } else {
+          socket.emit("session_restored", {
+            message: "La tentative de connexion a ete bloquee.",
+          });
         }
       } catch (err) {
         console.error("[dispatcher] Error processing kill_other_session", err);
@@ -309,7 +313,7 @@ module.exports = {
 function notifyAdminSessionConflict(io, adminId, newDeviceInfo) {
   return emitToAdminSockets(io, adminId, "force_logout", {
     reason: "duplicate_session",
-    message: "Une nouvelle connexion a été détectée sur ce compte.",
+    message: "Une nouvelle connexion tente d'acceder a ce compte. Vous pouvez la bloquer ou vous deconnecter.",
     newDevice: newDeviceInfo,
   });
 }

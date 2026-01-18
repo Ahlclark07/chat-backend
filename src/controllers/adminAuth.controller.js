@@ -138,7 +138,11 @@ module.exports = {
           });
         }
 
-        // On continue (ne bloque plus) pour permettre la connexion sur le nouvel appareil
+        return res.status(423).json({
+          message:
+            "Une session est deja active sur ce compte. L'admin connecte doit confirmer la nouvelle connexion.",
+          reason: "session_conflict",
+        });
       }
 
       const sessionId =
