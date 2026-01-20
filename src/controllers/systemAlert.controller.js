@@ -13,7 +13,25 @@ exports.getAlerts = async (req, res) => {
         },
       ],
     });
-    res.json(alerts);
+    const normalized = alerts.map((alert) => {
+      const json = alert?.toJSON ? alert.toJSON() : alert;
+      if (json && typeof json.details === "string") {
+        try {
+          json.details = JSON.parse(json.details);
+        } catch {
+          json.details = null;
+        }
+      }
+      if (
+        json?.details &&
+        json.details.conversation_id &&
+        !json.details.conversationId
+      ) {
+        json.details.conversationId = json.details.conversation_id;
+      }
+      return json;
+    });
+    res.json(normalized);
   } catch (err) {
     console.error(err);
     res

@@ -355,9 +355,9 @@ module.exports = {
       }
 
       const respondActivation = (payload) => {
-        const frontUrl = process.env.FRONT;
-        const acceptsJson = req.accepts(['html', 'json']) === 'json';
-        if (frontUrl && !acceptsJson) {
+        const frontUrl =
+          process.env.CLIENT_ACTIVATION_REDIRECT_URL || process.env.FRONT;
+        if (frontUrl) {
           return res.redirect(frontUrl);
         }
         return res.status(200).json(payload);
