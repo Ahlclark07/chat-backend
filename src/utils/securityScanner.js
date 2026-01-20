@@ -1,4 +1,4 @@
-const { SystemAlert, Admin } = require("../../models");
+const { SystemAlert, Admin, Conversation, Message } = require("../../models");
 const { sendMail } = require("../services/mail.service");
 const { renderSystemAlert } = require("../services/mailTemplates");
 const { findForbiddenWordsIn } = require("./forbiddenWords.util");
@@ -43,6 +43,31 @@ async function getGodAdminEmails() {
   return admins.map((a) => a.email).filter(Boolean);
 }
 
+async function resolveAdminId(senderAdminId, conversationId) {
+  if (senderAdminId) return senderAdminId;
+  if (!conversationId) return null;
+  try {
+    const conversation = await Conversation.findByPk(conversationId, {
+      attributes: ["assigned_admin_id"],
+    });
+    if (conversation?.assigned_admin_id) {
+      return conversation.assigned_admin_id;
+    }
+  } catch {
+    return null;
+  }
+  try {
+    const lastAdminMessage = await Message.findOne({
+      where: { conversation_id: conversationId, sender_type: "girl" },
+      order: [["createdAt", "DESC"]],
+      attributes: ["sender_id"],
+    });
+    return lastAdminMessage?.sender_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function checkSuspiciousContent(
   messageBody,
   senderAdminId,
@@ -50,20 +75,33 @@ async function checkSuspiciousContent(
   senderClientId = null
 ) {
   try {
+    const normalizedBody = String(messageBody || "");
+    if (!normalizedBody.trim()) {
+      return;
+    }
     let suspicious = false;
     let details = {};
 
     // 1. Phone number detection
     const blockDigits = /\d{7,}/;
 
-    if (blockDigits.test(messageBody.replace(/\s/g, ""))) {
+    if (blockDigits.test(normalizedBody.replace(/\s/g, ""))) {
       suspicious = true;
-      details = { reason: "PHONE_NUMBER_PATTERN", match: messageBody };
+      details = { reason: "PHONE_NUMBER_PATTERN", match: normalizedBody };
     }
 
-    // 2. Forbidden Words detection
+    // 2. Email detection
     if (!suspicious) {
-      const forbiddenMatches = await findForbiddenWordsIn(messageBody);
+      const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+      if (emailRegex.test(normalizedBody) || normalizedBody.includes("@")) {
+        suspicious = true;
+        details = { reason: "EMAIL_PATTERN", match: normalizedBody };
+      }
+    }
+
+    // 3. Forbidden Words detection
+    if (!suspicious) {
+      const forbiddenMatches = await findForbiddenWordsIn(normalizedBody);
       if (forbiddenMatches.length > 0) {
         suspicious = true;
         details = {
@@ -75,14 +113,23 @@ async function checkSuspiciousContent(
 
     if (suspicious) {
       console.log("Suspicious content detected (Scanner)!", details);
+      const resolvedAdminId = await resolveAdminId(
+        senderAdminId,
+        conversationId
+      );
+      const senderType = senderAdminId ? "girl" : "client";
       const alert = await createSystemAlert({
         type: "SUSPICIOUS_CONTENT",
         severity: "MEDIUM",
         status: "OPEN",
-        admin_id: senderAdminId || null,
+        admin_id: resolvedAdminId,
         details: {
-          messageBody,
+          messageBody: normalizedBody,
           conversationId,
+          senderType,
+          senderAdminId: senderAdminId || null,
+          assignedAdminId:
+            !senderAdminId && resolvedAdminId ? resolvedAdminId : null,
           senderClientId,
           ...details,
         },

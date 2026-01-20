@@ -154,9 +154,28 @@ function renderSystemAlert(data) {
     `;
   } else if (type === "SUSPICIOUS_CONTENT") {
     title = "Alerte : Contenu Suspect Détecté";
+    const senderType = details?.senderType || "admin";
+    const reasonLabel = (() => {
+      switch (details?.reason) {
+        case "PHONE_NUMBER_PATTERN":
+          return "Numéro de téléphone";
+        case "EMAIL_PATTERN":
+          return "Adresse email";
+        case "FORBIDDEN_WORD":
+          return "Mot interdit";
+        default:
+          return "Format interdit";
+      }
+    })();
+    const senderLine =
+      senderType === "client"
+        ? `Un client a envoyé un message suspect.${
+            adminName ? ` (Admin assigné : <strong>${adminName}</strong>)` : ""
+          }`
+        : `L'admin <strong>${adminName}</strong> a envoyé un message suspect.`;
     content = `
-      <p>L'admin <strong>${adminName}</strong> a envoyé un message suspect.</p>
-      <p>Motif : <strong>Détection de format interdit (numéro de téléphone ou mot banni).</strong></p>
+      <p>${senderLine}</p>
+      <p>Motif : <strong>${reasonLabel}.</strong></p>
       <p>Message :</p>
       <blockquote style="background: #f9f9f9; padding: 10px; border-left: 5px solid red;">
         ${details.messageBody}
