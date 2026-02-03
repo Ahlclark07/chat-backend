@@ -101,7 +101,7 @@ const logAdminAction = async ({ adminId, action, targetId, details }) => {
 };
 
 module.exports = {
-  // Créer un profil Girl
+  // Créer un profil
   createGirl: async (req, res) => {
     try {
       const {
@@ -131,6 +131,11 @@ module.exports = {
       const parsedPaysId = parseOptionalInt(pays_id);
       const parsedVilleId = parseOptionalInt(ville_id);
       const parsedAdminId = parseOptionalInt(admin_id);
+      const normalizedSexe = normalizeOptionalString(sexe);
+      const allowedSexes = new Set(["homme", "femme"]);
+      const finalSexe = allowedSexes.has(normalizedSexe)
+        ? normalizedSexe
+        : null;
 
       const girl = await Girl.create({
         nom,
@@ -139,7 +144,7 @@ module.exports = {
         description,
         pays_id: parsedPaysId ?? null,
         ville_id: parsedVilleId ?? null,
-        sexe,
+        sexe: finalSexe,
         telephone: normalizeOptionalString(telephone),
         pseudo: normalizedPseudo,
         photo_profil: req.files?.photo_profil?.[0]?.filename || null,
@@ -168,7 +173,7 @@ module.exports = {
       console.error(err);
       res
         .status(500)
-        .json({ message: "Erreur lors de la creation de la Girl." });
+        .json({ message: "Erreur lors de la creation du profil." });
     }
   },
 
@@ -193,7 +198,7 @@ module.exports = {
       } = req.body;
 
       const girl = await Girl.findByPk(girlId);
-      if (!girl) return res.status(404).json({ message: "Girl non trouvée" });
+      if (!girl) return res.status(404).json({ message: "Profil non trouvé" });
 
       // Mise à jour des champs basiques
       girl.nom = nom ?? girl.nom;
@@ -213,7 +218,12 @@ module.exports = {
         girl.admin_id = parsedAdminId;
       }
       if (typeof sexe !== "undefined") {
-        girl.sexe = sexe;
+        const normalizedSexeUpdate = normalizeOptionalString(sexe);
+        const allowedSexes = new Set(["homme", "femme"]);
+        if (normalizedSexeUpdate && !allowedSexes.has(normalizedSexeUpdate)) {
+          return res.status(400).json({ message: "Valeur de sexe invalide." });
+        }
+        girl.sexe = normalizedSexeUpdate;
       }
       if (typeof pseudo !== "undefined") {
         const normalizedPseudoUpdate = normalizeOptionalString(pseudo);
@@ -305,7 +315,7 @@ module.exports = {
       console.error(err);
       res
         .status(500)
-        .json({ message: "Erreur lors de la mise à jour de la girl." });
+        .json({ message: "Erreur lors de la mise à jour du profil." });
     }
   },
 
@@ -326,7 +336,7 @@ module.exports = {
       });
 
       if (!girl) {
-        return res.status(404).json({ message: "Girl non trouvée" });
+        return res.status(404).json({ message: "Profil non trouvé" });
       }
 
       return res.json(girl);
@@ -334,7 +344,7 @@ module.exports = {
       console.error(err);
       return res
         .status(500)
-        .json({ message: "Erreur lors de la récupération de la girl." });
+        .json({ message: "Erreur lors de la récupération du profil." });
     }
   },
 
@@ -384,7 +394,7 @@ module.exports = {
       console.error(err);
       res
         .status(500)
-        .json({ message: "Erreur lors de la récupération des girls." });
+        .json({ message: "Erreur lors de la récupération des profils." });
     }
   },
   deleteGirl: async (req, res) => {
@@ -394,13 +404,13 @@ module.exports = {
 
       if (admin.role !== "god") {
         return res.status(403).json({
-          message: "Accès refusé. Seul le god peut supprimer une girl.",
+          message: "Accès refusé. Seul le god peut supprimer un profil.",
         });
       }
 
       const girl = await Girl.findByPk(girlId);
       if (!girl) {
-        return res.status(404).json({ message: "Girl non trouvée." });
+        return res.status(404).json({ message: "Profil non trouvé." });
       }
 
       // Supprimer les photos de galerie sur le disque
@@ -452,12 +462,12 @@ module.exports = {
         targetId: girl.id,
         details: "nom: " + girl.nom + ", prenom: " + girl.prenom,
       });
-      res.status(200).json({ message: "Girl supprimée avec succès." });
+      res.status(200).json({ message: "Profil supprimé avec succès." });
     } catch (error) {
       console.error(error);
       res
         .status(500)
-        .json({ message: "Erreur lors de la suppression de la girl." });
+        .json({ message: "Erreur lors de la suppression du profil." });
     }
   },
 };

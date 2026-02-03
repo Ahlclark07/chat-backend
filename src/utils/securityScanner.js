@@ -141,4 +141,79 @@ async function checkSuspiciousContent(
   }
 }
 
-module.exports = { checkSuspiciousContent, createSystemAlert };
+function normalizeAlertDetails(raw) {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw;
+}
+
+async function checkRepeatedAdminMessage({
+  adminId,
+  clientId,
+  conversationId,
+  messageBody,
+}) {
+  try {
+    const normalizedBody = String(messageBody || "");
+    if (!adminId || !clientId || !normalizedBody) return;
+    if (!normalizedBody.trim()) return;
+
+    const count = await Message.count({
+      where: {
+        sender_type: "girl",
+        sender_id: adminId,
+        receiver_id: clientId,
+        body: normalizedBody,
+      },
+    });
+
+    if (count < 3) return; // Need 2 previous messages + this one
+
+    const existingAlerts = await SystemAlert.findAll({
+      where: { type: "REPEATED_ADMIN_MESSAGE", admin_id: adminId },
+      order: [["createdAt", "DESC"]],
+    });
+
+    const alreadyExists = existingAlerts.some((alert) => {
+      const details = normalizeAlertDetails(alert.details);
+      if (!details) return false;
+      const detailClientId =
+        details.clientId ?? details.client_id ?? details.senderClientId ?? null;
+      const detailBody =
+        details.messageBody ?? details.body ?? details.message ?? null;
+      return (
+        Number(detailClientId) === Number(clientId) &&
+        String(detailBody || "") === normalizedBody
+      );
+    });
+
+    if (alreadyExists) return;
+
+    await createSystemAlert({
+      type: "REPEATED_ADMIN_MESSAGE",
+      severity: "MEDIUM",
+      status: "OPEN",
+      admin_id: adminId,
+      details: {
+        messageBody: normalizedBody,
+        conversationId,
+        clientId,
+        repeatCount: count,
+      },
+    });
+  } catch (err) {
+    console.error("Error checking repeated admin message:", err);
+  }
+}
+
+module.exports = {
+  checkSuspiciousContent,
+  checkRepeatedAdminMessage,
+  createSystemAlert,
+};

@@ -175,6 +175,18 @@ module.exports = {
         } catch (_) {}
       }
 
+      if (body) {
+        try {
+          const { checkRepeatedAdminMessage } = require("../utils/securityScanner");
+          checkRepeatedAdminMessage({
+            adminId: req.admin.id,
+            clientId: conv.client_id,
+            conversationId: conv.id,
+            messageBody: body,
+          }).catch(() => {});
+        } catch (_) {}
+      }
+
       res.status(201).json(message);
     } catch (err) {
       console.error(err);

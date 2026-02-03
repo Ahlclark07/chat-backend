@@ -14,7 +14,11 @@ module.exports = (sequelize, DataTypes) => {
   SystemAlert.init(
     {
       type: {
-        type: DataTypes.ENUM("MULTIPLE_CONNECTIONS", "SUSPICIOUS_CONTENT"),
+        type: DataTypes.ENUM(
+          "MULTIPLE_CONNECTIONS",
+          "SUSPICIOUS_CONTENT",
+          "REPEATED_ADMIN_MESSAGE"
+        ),
         allowNull: false,
       },
       severity: {
