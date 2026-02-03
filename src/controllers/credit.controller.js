@@ -1,6 +1,19 @@
 const { Client, CreditTransaction } = require("../../models");
+const { getCoinOffers } = require("../services/coinOffers.service");
 
 module.exports = {
+  // GET /api/credits/offers
+  async listOffers(req, res) {
+    try {
+      const offers = await getCoinOffers();
+      return res.json(offers);
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ message: "Erreur lors du chargement des offres." });
+    }
+  },
   // POST /api/credits/purchase
   async purchaseCredits(req, res) {
     try {
@@ -48,4 +61,3 @@ module.exports = {
     }
   },
 };
-

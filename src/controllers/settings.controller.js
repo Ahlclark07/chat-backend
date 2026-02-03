@@ -4,6 +4,10 @@ const {
   Girl,
   sequelize,
 } = require("../../models");
+const {
+  getCoinOffers,
+  saveCoinOffers,
+} = require("../services/coinOffers.service");
 
 const parseIdList = (input) => {
   if (input === undefined || input === null) return [];
@@ -167,6 +171,36 @@ module.exports = {
     } catch (e) {
       console.error(e);
       res.status(500).json({ message: "Erreur mise a jour auto-messages." });
+    }
+  },
+
+  async getCoinOffers(req, res) {
+    try {
+      const offers = await getCoinOffers();
+      res.json(offers);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Erreur chargement offres coins." });
+    }
+  },
+
+  async updateCoinOffers(req, res) {
+    try {
+      const role = req.admin?.role;
+      if (role !== "god") {
+        return res
+          .status(403)
+          .json({ message: "Seul le god peut modifier les offres." });
+      }
+      const payload =
+        typeof req.body?.offers !== "undefined" ? req.body.offers : req.body;
+      const offers = await saveCoinOffers(payload);
+      res.json(offers);
+    } catch (e) {
+      console.error(e);
+      res
+        .status(400)
+        .json({ message: e.message || "Offres invalides." });
     }
   },
 
