@@ -15,6 +15,16 @@ router.patch(
   controller.updateAutoMessages
 );
 router.get(
+  "/settings/coin-offers",
+  authenticateAdminJWT,
+  controller.getCoinOffers
+);
+router.put(
+  "/settings/coin-offers",
+  authenticateAdminJWT,
+  controller.updateCoinOffers
+);
+router.get(
   "/settings/homepage-girls",
   authenticateAdminJWT,
   controller.getHomepageGirls
