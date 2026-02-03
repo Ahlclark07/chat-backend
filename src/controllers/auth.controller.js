@@ -76,13 +76,14 @@ module.exports = {
       const normalizedPseudo =
         typeof pseudo === "string" ? pseudo.trim() : null;
 
-      if (normalizedPseudo) {
-        const existingPseudoClient = await Client.findOne({
-          where: { pseudo: normalizedPseudo },
-        });
-        if (existingPseudoClient) {
-          return res.status(400).json({ message: "Pseudo deja utilisé." });
-        }
+      if (!normalizedPseudo) {
+        return res.status(400).json({ message: "Pseudo requis." });
+      }
+      const existingPseudoClient = await Client.findOne({
+        where: { pseudo: normalizedPseudo },
+      });
+      if (existingPseudoClient) {
+        return res.status(400).json({ message: "Pseudo deja utilisé." });
       }
 
       const allowedAttirance = ["femme", "homme", "tous"];
@@ -458,21 +459,21 @@ module.exports = {
       if (typeof pseudo !== "undefined") {
         const normalizedPseudoUpdate =
           typeof pseudo === "string" ? pseudo.trim() : null;
-        if (normalizedPseudoUpdate) {
-          const existingPseudoClient = await Client.findOne({
-            where: {
-              pseudo: normalizedPseudoUpdate,
-              id: { [Op.ne]: clientId },
-            },
-          });
-          if (existingPseudoClient) {
-            return res.status(400).json({ message: "Pseudo deja utilisé." });
-          }
+        if (!normalizedPseudoUpdate) {
+          return res.status(400).json({ message: "Pseudo requis." });
         }
-        updates.pseudo =
-          normalizedPseudoUpdate && normalizedPseudoUpdate.length > 0
-            ? normalizedPseudoUpdate
-            : null;
+        const existingPseudoClient = await Client.findOne({
+          where: {
+            pseudo: normalizedPseudoUpdate,
+            id: { [Op.ne]: clientId },
+          },
+        });
+        if (existingPseudoClient) {
+          return res.status(400).json({ message: "Pseudo deja utilisé." });
+        }
+        updates.pseudo = normalizedPseudoUpdate;
+      } else if (!client.pseudo) {
+        return res.status(400).json({ message: "Pseudo requis." });
       }
 
       if (typeof attirance !== "undefined") {

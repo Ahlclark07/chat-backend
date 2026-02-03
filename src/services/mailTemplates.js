@@ -182,6 +182,16 @@ function renderSystemAlert(data) {
       </blockquote>
       <p>Conversation ID : ${details.conversationId}</p>
     `;
+  } else if (type === "REPEATED_ADMIN_MESSAGE") {
+    title = "Alerte : Messages Admin Répétés";
+    content = `
+      <p>L'admin <strong>${adminName}</strong> a envoyé un message identique à plusieurs reprises au même client.</p>
+      <p>Occurrences détectées : <strong>${details?.repeatCount || "?"}</strong></p>
+      <p>Conversation ID : ${details?.conversationId || "-"}</p>
+      <blockquote style="background: #f9f9f9; padding: 10px; border-left: 5px solid orange;">
+        ${details?.messageBody || ""}
+      </blockquote>
+    `;
   }
 
   return {

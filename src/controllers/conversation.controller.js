@@ -220,13 +220,23 @@ exports.sendMessageAsGirl = async (req, res) => {
 
     // Check for suspicious content (system alert)
     // Check for suspicious content (system alert)
-    const { checkSuspiciousContent } = require("../utils/securityScanner");
+    const {
+      checkSuspiciousContent,
+      checkRepeatedAdminMessage,
+    } = require("../utils/securityScanner");
     checkSuspiciousContent(
       body,
       req.admin.id,
       conversation_id,
       conversation.client_id
     ).catch((err) => console.error("Suspicious check error:", err));
+
+    checkRepeatedAdminMessage({
+      adminId: req.admin.id,
+      clientId: conversation.client_id,
+      conversationId: conversation.id,
+      messageBody: body,
+    }).catch((err) => console.error("Repeated message check error:", err));
 
     res.status(201).json(message);
   } catch (err) {
