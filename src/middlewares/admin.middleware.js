@@ -5,13 +5,6 @@ const {
 } = require("../utils/deviceFingerprint");
 const { logAdminAuth } = require("../utils/adminAuthLogger");
 const JWT_SECRET = process.env.JWT_SECRET;
-const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const ADMIN_SESSION_IDLE_TIMEOUT_MS =
-  parseInt(
-    process.env.ADMIN_SESSION_IDLE_TIMEOUT_MS ||
-      `${DEFAULT_SESSION_IDLE_TIMEOUT_MS}`,
-    10
-  ) || DEFAULT_SESSION_IDLE_TIMEOUT_MS;
 const ADMIN_SESSION_TOUCH_INTERVAL_MS =
   parseInt(process.env.ADMIN_SESSION_TOUCH_INTERVAL_MS || "60000", 10) || 60000;
 
@@ -108,22 +101,6 @@ async function authenticateAdminJWT(req, res, next) {
       logAdminAuth("MIDDLEWARE_SESSION_NO_LAST_SEEN", {
         ...requestContext,
         adminId: admin.id,
-      });
-      await admin.update({
-        current_session_token: null,
-        current_session_started_at: null,
-        current_session_device_hash: null,
-      });
-      return res
-        .status(401)
-        .json({ message: "Session admin invalide ou expiree." });
-    }
-
-    if (now.getTime() - lastSeen.getTime() >= ADMIN_SESSION_IDLE_TIMEOUT_MS) {
-      logAdminAuth("MIDDLEWARE_SESSION_IDLE_TIMEOUT", {
-        ...requestContext,
-        adminId: admin.id,
-        lastSeen: lastSeen.toISOString(),
       });
       await admin.update({
         current_session_token: null,

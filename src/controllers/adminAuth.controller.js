@@ -7,13 +7,6 @@ const { Admin, AdminActivityLog } = require("../../models");
 const { extractRequestDeviceIdentity } = require("../utils/deviceFingerprint");
 const { logAdminAuth } = require("../utils/adminAuthLogger");
 const JWT_SECRET = process.env.JWT_SECRET;
-const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const ADMIN_SESSION_IDLE_TIMEOUT_MS =
-  parseInt(
-    process.env.ADMIN_SESSION_IDLE_TIMEOUT_MS ||
-      `${DEFAULT_SESSION_IDLE_TIMEOUT_MS}`,
-    10
-  ) || DEFAULT_SESSION_IDLE_TIMEOUT_MS;
 
 module.exports = {
   async login(req, res) {
@@ -86,13 +79,7 @@ module.exports = {
 
       const now = new Date();
       const existingSessionId = admin.current_session_token || null;
-      const lastSeen = admin.current_session_started_at
-        ? new Date(admin.current_session_started_at)
-        : null;
-      const sessionStillActive =
-        existingSessionId &&
-        lastSeen &&
-        now.getTime() - lastSeen.getTime() < ADMIN_SESSION_IDLE_TIMEOUT_MS;
+      const sessionStillActive = !!existingSessionId;
 
       const fingerprintMatches =
         sessionStillActive &&
