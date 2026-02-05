@@ -5,8 +5,10 @@ const {
   Girl,
   Client,
   Setting,
+  ClientBlock,
   sequelize,
 } = require("../../models");
+const { Op } = require("sequelize");
 const { handleClientMessage } = require("../sockets/messages-dispatcher");
 const { findForbiddenWordsIn } = require("../utils/forbiddenWords.util");
 const { notifyForbiddenWordAlert } = require("../services/alert.service");
@@ -14,8 +16,20 @@ const { notifyForbiddenWordAlert } = require("../services/alert.service");
 // GET /chat/conversations
 module.exports.getClientConversations = async (req, res) => {
   try {
-    const conversations = await Conversation.findAll({
+    const blocked = await ClientBlock.findAll({
       where: { client_id: req.user.id },
+      attributes: ["girl_id"],
+      raw: true,
+    });
+    const blockedGirlIds = blocked.map((b) => b.girl_id).filter(Boolean);
+
+    const conversations = await Conversation.findAll({
+      where: {
+        client_id: req.user.id,
+        ...(blockedGirlIds.length
+          ? { girl_id: { [Op.notIn]: blockedGirlIds } }
+          : {}),
+      },
       include: [
         {
           association: "girl",
@@ -47,6 +61,16 @@ module.exports.sendMessage = async (req, res) => {
 
     if (!body && !req.file) {
       return res.status(400).json({ message: "Message vide." });
+    }
+
+    const blocked = await ClientBlock.findOne({
+      where: { client_id: clientId, girl_id: girlId },
+      attributes: ["id"],
+    });
+    if (blocked) {
+      return res.status(403).json({
+        message: "Vous avez bloqué ce profil. Impossible d'envoyer un message.",
+      });
     }
 
     let mediaPath = null;

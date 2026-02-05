@@ -26,6 +26,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "girl_id",
         as: "photos",
       });
+      Girl.hasMany(models.ClientBlock, {
+        foreignKey: "girl_id",
+        as: "blockedByClients",
+      });
 
       Girl.hasOne(models.HomepageGirl, {
         foreignKey: "girl_id",

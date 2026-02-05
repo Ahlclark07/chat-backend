@@ -6,8 +6,13 @@ const {
   GirlPhoto,
   Favorite,
   HomepageGirl,
+  ClientBlock,
+  Conversation,
 } = require("../../models");
 const { Op } = require("sequelize");
+const {
+  removeConversationFromPools,
+} = require("../sockets/messages-dispatcher");
 module.exports = {
   listGirls: async (req, res) => {
     try {
@@ -140,6 +145,145 @@ module.exports = {
       res.json(likedIds);
     } catch (error) {
       console.log(error);
+    }
+  },
+
+  // GET /client/blocks
+  listBlockedProfiles: async (req, res) => {
+    try {
+      const clientId = req.user?.id;
+      if (!clientId) return res.status(401).json({ message: "Non autorisÃ©." });
+
+      const blocks = await ClientBlock.findAll({
+        where: { client_id: clientId },
+        include: [
+          {
+            model: Girl,
+            as: "girl",
+            include: [
+              { model: City, as: "ville", attributes: ["id", "name"] },
+              { model: Country, as: "pays", attributes: ["id", "name"] },
+            ],
+          },
+        ],
+        order: [["createdAt", "DESC"]],
+      });
+
+      res.json(blocks);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Erreur lors du chargement des blocages." });
+    }
+  },
+
+  // POST /client/girls/:id/block
+  blockGirl: async (req, res) => {
+    try {
+      const clientId = req.user?.id;
+      if (!clientId) return res.status(401).json({ message: "Non autorisÃ©." });
+
+      const girlId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(girlId)) {
+        return res.status(400).json({ message: "Identifiant invalide." });
+      }
+
+      const reasonRaw = req.body?.reason ?? req.body?.message ?? "";
+      const reason = String(reasonRaw).trim();
+      if (!reason) {
+        return res.status(400).json({
+          message: "Une raison est requise pour bloquer un profil.",
+        });
+      }
+
+      const girl = await Girl.findByPk(girlId, {
+        attributes: ["id", "nom", "prenom", "pseudo", "sexe"],
+      });
+      if (!girl) {
+        return res.status(404).json({ message: "Profil introuvable." });
+      }
+
+      const existing = await ClientBlock.findOne({
+        where: { client_id: clientId, girl_id: girlId },
+      });
+      if (existing) {
+        return res.json({
+          blocked: true,
+          alreadyBlocked: true,
+          limit: 3,
+          remaining: null,
+        });
+      }
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+      const monthlyCount = await ClientBlock.count({
+        where: {
+          client_id: clientId,
+          createdAt: { [Op.gte]: startOfMonth },
+        },
+      });
+
+      if (monthlyCount >= 3) {
+        return res.status(400).json({
+          message: "Limite de 3 blocages par mois atteinte.",
+          limit: 3,
+          remaining: 0,
+        });
+      }
+
+      const block = await ClientBlock.create({
+        client_id: clientId,
+        girl_id: girlId,
+        reason,
+      });
+
+      const conversation = await Conversation.findOne({
+        where: { client_id: clientId, girl_id: girlId },
+        attributes: ["id"],
+      });
+      if (conversation?.id) {
+        removeConversationFromPools(conversation.id).catch((err) =>
+          console.error("[blocks] cleanup pools error:", err)
+        );
+      }
+
+      const remaining = Math.max(0, 3 - (monthlyCount + 1));
+      return res.status(201).json({
+        blocked: true,
+        blockId: block.id,
+        limit: 3,
+        remaining,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Erreur lors du blocage du profil." });
+    }
+  },
+
+  // DELETE /client/girls/:id/block
+  unblockGirl: async (req, res) => {
+    try {
+      const clientId = req.user?.id;
+      if (!clientId) return res.status(401).json({ message: "Non autorisÃ©." });
+
+      const girlId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(girlId)) {
+        return res.status(400).json({ message: "Identifiant invalide." });
+      }
+
+      const existing = await ClientBlock.findOne({
+        where: { client_id: clientId, girl_id: girlId },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ message: "Blocage introuvable." });
+      }
+
+      await existing.destroy();
+      return res.json({ unblocked: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Erreur lors du dÃ©blocage." });
     }
   },
 

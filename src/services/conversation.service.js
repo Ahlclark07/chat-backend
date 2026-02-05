@@ -1,6 +1,46 @@
-const { Conversation, Message, Girl, Client, Admin } = require("../../models");
+const {
+  Conversation,
+  Message,
+  Girl,
+  Client,
+  Admin,
+  ClientBlock,
+} = require("../../models");
 const { Op, Sequelize } = require("sequelize");
 const { formatMessages } = require("../utils/messageFormatter");
+
+function buildBlockKey(clientId, girlId) {
+  return `${clientId || "0"}:${girlId || "0"}`;
+}
+
+async function getBlockedPairsForConversations(conversations = []) {
+  const pairs = conversations
+    .map((conv) => ({
+      client_id: conv.client_id ?? conv.client?.id,
+      girl_id: conv.girl_id ?? conv.girl?.id,
+    }))
+    .filter((pair) => pair.client_id && pair.girl_id);
+
+  if (!pairs.length) {
+    return new Set();
+  }
+
+  const clientIds = [...new Set(pairs.map((p) => p.client_id))];
+  const girlIds = [...new Set(pairs.map((p) => p.girl_id))];
+
+  const blocks = await ClientBlock.findAll({
+    where: {
+      client_id: { [Op.in]: clientIds },
+      girl_id: { [Op.in]: girlIds },
+    },
+    attributes: ["client_id", "girl_id"],
+    raw: true,
+  });
+
+  return new Set(
+    blocks.map((row) => buildBlockKey(row.client_id, row.girl_id))
+  );
+}
 
 function buildGirlWithPhotosInclude() {
   return {
@@ -134,12 +174,12 @@ async function getUnprocessedClientConversations() {
       },
     ],
   });
-  console.log("////////////////////////////////////////////////////");
-  const x = messages.map((m) => m.conversation);
-  console.log("number : " + x.length);
-  console.log("////////////////////////////////////////////////////");
-
-  return x;
+  const conversations = messages.map((m) => m.conversation).filter(Boolean);
+  const blockedPairs = await getBlockedPairsForConversations(conversations);
+  return conversations.filter(
+    (conv) =>
+      !blockedPairs.has(buildBlockKey(conv.client_id, conv.girl_id))
+  );
 }
 
 async function getConversationsAwaitingClientReply(clientId) {
@@ -178,8 +218,24 @@ async function getConversationsAwaitingClientReply(clientId) {
     attributes: ["conversation_id"],
     raw: true,
   });
+  const latestConversationIds = latestGirlMessages.map((m) => m.conversation_id);
+  if (!latestConversationIds.length) {
+    return [];
+  }
 
-  return latestGirlMessages.map((m) => m.conversation_id);
+  const conversationRows = await Conversation.findAll({
+    where: { id: { [Op.in]: latestConversationIds } },
+    attributes: ["id", "client_id", "girl_id"],
+    raw: true,
+  });
+
+  const blockedPairs = await getBlockedPairsForConversations(conversationRows);
+  return conversationRows
+    .filter(
+      (conv) =>
+        !blockedPairs.has(buildBlockKey(conv.client_id, conv.girl_id))
+    )
+    .map((conv) => conv.id);
 }
 module.exports = {
   getUnprocessedClientConversations,

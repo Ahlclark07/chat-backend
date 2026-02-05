@@ -61,6 +61,18 @@ const AUTHOR_INCLUDE = {
   attributes: ["id", "nom", "prenom", "email", "role"],
 };
 
+const CLIENT_INCLUDE = {
+  model: Client,
+  as: "client",
+  attributes: ["id", "nom", "prenom", "email", "pseudo"],
+};
+
+const GIRL_INCLUDE = {
+  model: Girl,
+  as: "girl",
+  attributes: ["id", "nom", "prenom", "pseudo", "sexe"],
+};
+
 function presentSignalement(
   instance,
   { includeMessages = false, exposeAdminIdentifiers = false } = {}
@@ -103,6 +115,8 @@ async function loadSignalementById(
   const record = await Signalement.findByPk(id, {
     include: [
       AUTHOR_INCLUDE,
+      CLIENT_INCLUDE,
+      GIRL_INCLUDE,
       buildConversationInclude({ includeMessages }),
     ],
   });
@@ -191,7 +205,7 @@ module.exports = {
 
       const { rows, count } = await Signalement.findAndCountAll({
         where,
-        include: [AUTHOR_INCLUDE, buildConversationInclude()],
+        include: [AUTHOR_INCLUDE, CLIENT_INCLUDE, GIRL_INCLUDE, buildConversationInclude()],
         order: [["createdAt", "DESC"]],
         limit,
         offset: (page - 1) * limit,

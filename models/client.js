@@ -22,6 +22,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "client_id",
         as: "autoMessageDeliveries",
       });
+      Client.hasMany(models.ClientBlock, {
+        foreignKey: "client_id",
+        as: "blockedProfiles",
+      });
       Client.hasMany(models.ClientActivationToken, {
         foreignKey: "client_id",
         as: "activationTokens",

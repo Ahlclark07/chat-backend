@@ -12,6 +12,16 @@ router.post(
   authenticateJWT,
   clientController.toggleFavorite
 );
+router.post(
+  "/girls/:id/block",
+  authenticateJWT,
+  clientController.blockGirl
+);
+router.delete(
+  "/girls/:id/block",
+  authenticateJWT,
+  clientController.unblockGirl
+);
 router.get("/filteredgirls", clientController.getFilteredGirls);
 router.put(
   "/me",
@@ -21,7 +31,6 @@ router.put(
 );
 
 router.get("/favorites/ids", authenticateJWT, clientController.getLikedGirlIds);
-
-module.exports = router;
+router.get("/blocks", authenticateJWT, clientController.listBlockedProfiles);
 
 module.exports = router;
