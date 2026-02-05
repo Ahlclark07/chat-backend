@@ -302,12 +302,35 @@ async function handleClientMessage(io, { conversationId }) {
   });
 }
 
+async function removeConversationFromPools(conversationId) {
+  if (!conversationId) return;
+
+  const assignment = assignedConversations.get(conversationId);
+  if (assignment) {
+    clearTimeout(assignment.timeout);
+    assignedConversations.delete(conversationId);
+  }
+  if (pendingMessages.has(conversationId)) {
+    pendingMessages.delete(conversationId);
+  }
+  try {
+    await setConversationAssignedAdmin(conversationId, null);
+  } catch (err) {
+    console.error(
+      "[dispatcher] impossible de nettoyer l'assignation",
+      conversationId,
+      err
+    );
+  }
+}
+
 module.exports = {
   initMessageDispatcher,
   handleClientMessage,
   queueConversationForFollowUp,
   notifyAdminSessionConflict,
   getAdminActiveSocketCount,
+  removeConversationFromPools,
 };
 
 function notifyAdminSessionConflict(io, adminId, newDeviceInfo) {

@@ -10,6 +10,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
       });
+      Signalement.belongsTo(models.Client, {
+        foreignKey: "client_id",
+        as: "client",
+        onDelete: "SET NULL",
+        onUpdate: "CASCADE",
+      });
+      Signalement.belongsTo(models.Girl, {
+        foreignKey: "girl_id",
+        as: "girl",
+        onDelete: "SET NULL",
+        onUpdate: "CASCADE",
+      });
       Signalement.belongsTo(models.Conversation, {
         foreignKey: "conversation_id",
         as: "conversation",
@@ -23,11 +35,23 @@ module.exports = (sequelize, DataTypes) => {
     {
       admin_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
+      },
+      client_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      girl_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
       },
       message: {
         type: DataTypes.TEXT,
         allowNull: false,
+      },
+      type: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
       status: {
         type: DataTypes.ENUM("en_cours", "termine"),

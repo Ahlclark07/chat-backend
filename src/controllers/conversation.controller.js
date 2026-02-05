@@ -1,4 +1,11 @@
-const { Conversation, Message, Client, Girl, Admin } = require("../../models");
+const {
+  Conversation,
+  Message,
+  Client,
+  Girl,
+  Admin,
+  ClientBlock,
+} = require("../../models");
 const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
@@ -190,6 +197,20 @@ exports.sendMessageAsGirl = async (req, res) => {
       return res.status(404).json({ message: "Conversation introuvable." });
     }
 
+    const blocked = await ClientBlock.findOne({
+      where: {
+        client_id: conversation.client_id,
+        girl_id: conversation.girl_id,
+      },
+      attributes: ["id"],
+    });
+    if (blocked) {
+      return res.status(403).json({
+        message:
+          "Le client a bloqué ce profil. Impossible d'envoyer un message.",
+      });
+    }
+
     let mediaPath = null;
     if (req.file) {
       mediaPath = req.file.filename;
@@ -261,8 +282,19 @@ exports.getAvailableClientsForGirl = async (req, res) => {
       parseInt(id, 10)
     );
 
+    const blockedClients = await ClientBlock.findAll({
+      where: { girl_id },
+      attributes: ["client_id"],
+      raw: true,
+    });
+    const blockedClientIds = blockedClients
+      .map((b) => b.client_id)
+      .filter(Boolean);
+
     const availableIds = onlineClientIds.filter(
-      (id) => !clientIdsInConversation.includes(id)
+      (id) =>
+        !clientIdsInConversation.includes(id) &&
+        !blockedClientIds.includes(id)
     );
 
     const clients = await Client.findAll({

@@ -1,4 +1,10 @@
-const { AdminGirl, Girl, Conversation, Message } = require("../../models");
+const {
+  AdminGirl,
+  Girl,
+  Conversation,
+  Message,
+  ClientBlock,
+} = require("../../models");
 const { Op } = require("sequelize");
 const {
   incrementAdminParticipation,
@@ -111,6 +117,17 @@ module.exports = {
       });
 
       if (!isLinked) return res.status(403).json({ message: "Non autorisé." });
+
+      const blocked = await ClientBlock.findOne({
+        where: { client_id: conv.client_id, girl_id: conv.girl_id },
+        attributes: ["id"],
+      });
+      if (blocked) {
+        return res.status(403).json({
+          message:
+            "Le client a bloqué ce profil. Impossible d'envoyer un message.",
+        });
+      }
 
       const { count, rows: messages } = await Message.findAndCountAll({
         where: { conversation_id: conversationId },
